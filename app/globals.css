@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 220 38% 97%;
+  --panel: 0 0% 100%;
+  --panel-alt: 220 33% 96%;
+  --border: 222 23% 88%;
+  --text: 228 23% 15%;
+  --muted: 226 10% 49%;
+  --brand: 227 89% 57%;
+  --brand-muted: 224 100% 97%;
+  --success: 160 72% 42%;
+  --warning: 38 94% 54%;
+  --danger: 1 81% 60%;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-bg text-text antialiased;
+  font-family: var(--font-plus-jakarta), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background-image:
+    radial-gradient(circle at 0 0, hsl(var(--brand-muted)) 0, transparent 34%),
+    radial-gradient(circle at 100% 100%, hsl(var(--brand-muted)) 0, transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 247, 255, 0.94));
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+a {
+  @apply text-inherit no-underline;
+}
+
+button,
+input,
+select,
+textarea {
+  @apply outline-none transition;
+}
+
+::selection {
+  background: hsl(var(--brand) / 0.16);
+}
+
+.surface-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(251, 252, 255, 0.92)),
+    radial-gradient(circle at top left, hsl(var(--brand-muted)) 0, transparent 38%);
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border));
+  border-radius: 99px;
+}
