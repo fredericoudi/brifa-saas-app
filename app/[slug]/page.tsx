@@ -53,8 +53,8 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
       <BrifaFavicon />
       <div className="grid min-h-screen lg:grid-cols-2">
         <section className="flex min-h-screen bg-white">
-          <div className="mx-auto flex w-full max-w-[560px] flex-col px-8 py-8 sm:px-12 lg:px-14 xl:px-16">
-            <div className="w-full self-start">
+          <div className="flex w-full flex-col px-8 py-8 sm:px-12 lg:px-14 xl:px-16">
+            <div className="w-full">
               <div className="flex items-center justify-between gap-6">
               <div className="flex h-[28px] items-center">
                 <Image
@@ -65,7 +65,7 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
                 />
               </div>
 
-              <div className="ml-auto flex items-center justify-end gap-4">
+              <div className="flex items-center justify-end gap-4">
                 <AgencyMark
                   agencyName={agency.name}
                   logoUrl={agency.logo_url}
@@ -80,8 +80,8 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
               </div>
             </div>
 
-            <div className="flex flex-1 items-center">
-              <div className="w-full">
+            <div className="flex flex-1 items-center justify-center">
+              <div className="w-full max-w-[560px]">
                 {agencyBlocked ? (
                   <div className="space-y-6">
                     <div>
@@ -96,11 +96,6 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
                         Entre em contato com o administrador da plataforma para regularizar o acesso desta agência.
                       </p>
                     </div>
-
-                    <Link href="/" className="inline-flex items-center gap-2 text-sm font-medium text-brand hover:opacity-80">
-                      Voltar para o login geral
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
                   </div>
                 ) : (
                   <div className="space-y-8">
@@ -128,15 +123,16 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
                       variant="bare"
                       formClassName="space-y-5"
                     />
-
-                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 pt-2 text-xs text-muted">
-                      <Link href="/" className="transition hover:text-brand">
-                        Login geral da plataforma
-                      </Link>
-                    </div>
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="w-full pt-8">
+              <Link href="/" className="inline-flex items-center gap-2 text-xs text-muted transition hover:text-brand">
+                Login geral da plataforma
+                {agencyBlocked ? <ArrowRight className="h-3.5 w-3.5" /> : null}
+              </Link>
             </div>
           </div>
         </section>
