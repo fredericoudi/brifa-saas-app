@@ -26,3 +26,6 @@ pnpm-debug.log*
 
 # typescript
 *.tsbuildinfo
+
+# local backups
+package-lock-usuario*.json

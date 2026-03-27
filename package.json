@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "deploy:prod": "npx vercel --prod --yes",
     "start": "next start",
     "lint": "next lint"
   },

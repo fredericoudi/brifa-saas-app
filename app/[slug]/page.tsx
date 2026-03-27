@@ -51,10 +51,10 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
   return (
     <main className="min-h-screen bg-white" style={brandStyle as CSSProperties}>
       <BrifaFavicon />
-      <div className="grid min-h-screen lg:grid-cols-[minmax(520px,40%)_1fr]">
+      <div className="grid min-h-screen lg:grid-cols-2">
         <section className="flex min-h-screen bg-white">
-          <div className="flex w-full flex-col px-8 py-8 sm:px-12 lg:px-14 xl:px-20">
-            <div className="w-full max-w-[520px] self-start">
+          <div className="mx-auto flex w-full max-w-[560px] flex-col px-8 py-8 sm:px-12 lg:px-14 xl:px-16">
+            <div className="w-full self-start">
               <div className="flex items-center justify-between gap-6">
               <div className="flex h-[28px] items-center">
                 <Image
@@ -81,7 +81,7 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
             </div>
 
             <div className="flex flex-1 items-center">
-              <div className="w-full max-w-[520px]">
+              <div className="w-full">
                 {agencyBlocked ? (
                   <div className="space-y-6">
                     <div>
