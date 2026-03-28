@@ -43,15 +43,15 @@ export function JobExitBar({ jobId, jobTitle }: { jobId: string; jobTitle: strin
   }
 
   return (
-    <div className="fixed bottom-3 left-3 right-3 z-40 md:bottom-4 md:left-4 md:right-4 lg:left-[calc(var(--content-offset)+16px)] lg:right-4">
-      <div className="rounded-[28px] border border-border bg-white/95 px-4 py-4 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur">
-        <div className="flex items-center justify-end">
-          <Button type="button" size="lg" onClick={handleExit} disabled={loading}>
-            {loading ? "Saindo..." : "Saída"}
-          </Button>
-        </div>
-        {error ? <p className="mt-3 text-xs text-rose-700">{error}</p> : null}
-      </div>
+    <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2 lg:bottom-6 lg:right-6">
+      {error ? (
+        <p className="max-w-[320px] rounded-2xl border border-rose-200 bg-white/95 px-4 py-3 text-xs text-rose-700 shadow-[0_18px_45px_-32px_rgba(15,23,42,0.45)] backdrop-blur">
+          {error}
+        </p>
+      ) : null}
+      <Button type="button" size="lg" onClick={handleExit} disabled={loading} className="min-w-[160px] shadow-panel">
+        {loading ? "Saindo..." : "Saída"}
+      </Button>
     </div>
   );
 }
