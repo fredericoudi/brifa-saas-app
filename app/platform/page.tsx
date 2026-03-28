@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Building2, CreditCard, Grid2x2, Users } from "lucide-react";
+import { Archive, ArrowRight, Building2, CreditCard, Grid2x2, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
@@ -13,6 +13,12 @@ const quickLinks = [
     title: "Agências",
     description: "Abra o painel unificado com listagem, cadastro, slug, ativação e edição das contas.",
     icon: Building2
+  },
+  {
+    href: "/platform/archived",
+    title: "Arquivados",
+    description: "Consulte os jobs arquivados por agência e mantenha o histórico centralizado.",
+    icon: Archive
   },
   {
     href: "/platform/plans",

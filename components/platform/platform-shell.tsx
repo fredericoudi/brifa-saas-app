@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Archive,
   ArrowLeft,
   Building2,
   CreditCard,
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils";
 const platformNavItems = [
   { href: "/platform", label: "Dashboard", icon: LayoutDashboard },
   { href: "/platform/agencies", label: "Agências", icon: Building2 },
+  { href: "/platform/archived", label: "Arquivados", icon: Archive },
   { href: "/platform/plans", label: "Configurar planos", icon: Grid2x2 },
   { href: "/platform/subscriptions", label: "Assinaturas", icon: CreditCard },
   { href: "/platform/users", label: "Usuários", icon: Users },
@@ -32,6 +34,7 @@ const platformNavItems = [
 const pageTitleMap: Record<string, string> = {
   platform: "Dashboard Master",
   agencies: "Agências",
+  archived: "Arquivados",
   plans: "Configurar planos",
   subscriptions: "Assinaturas",
   users: "Usuários",
