@@ -448,7 +448,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         </Card>
       ) : null}
 
-      {profile.role !== "admin" && currentUserTasks.length > 0 ? <JobExitBar jobId={typedJob.id} jobTitle={typedJob.title} /> : null}
+      {currentUserIsAssignee ? <JobExitBar jobId={typedJob.id} jobTitle={typedJob.title} /> : null}
     </div>
   );
 }
