@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { LoadingBlock } from "@/components/ui/loading";
 import type { AgencyCommercialContext } from "@/lib/commercial";
 import type { Job, JobParticipantHistory, UserProfile } from "@/lib/database.types";
+import { isMissingJobsArchivedAtColumn } from "@/lib/jobs-archive";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { cn, formatDate, JOB_STATUS_LABEL, JOB_STATUS_ORDER } from "@/lib/utils";
 
@@ -134,15 +135,28 @@ export default function JobsKanbanPage() {
       };
       setCommercialContext(commercialResponse.ok ? commercialPayload.context ?? null : null);
 
-      const { data: jobsData, error: jobsError } = await supabase
+      let jobsResponse = await supabase
         .from("jobs")
-        .select("id, agency_id, client_id, title, job_code, status, created_at, due_date, due_time, client:clients(id, name)")
+        .select(
+          "id, agency_id, client_id, title, job_code, status, created_at, due_date, due_time, archived_at, client:clients(id, name)"
+        )
         .eq("agency_id", typedProfile.agency_id)
+        .is("archived_at", null)
         .order("created_at", { ascending: false });
 
-      if (jobsError) throw jobsError;
+      if (jobsResponse.error && isMissingJobsArchivedAtColumn(jobsResponse.error.message)) {
+        jobsResponse = await supabase
+          .from("jobs")
+          .select("id, agency_id, client_id, title, job_code, status, created_at, due_date, due_time, client:clients(id, name)")
+          .eq("agency_id", typedProfile.agency_id)
+          .order("created_at", { ascending: false });
+      }
 
-      const typedJobs = (jobsData as JobWithClient[]) ?? [];
+      if (jobsResponse.error) throw jobsResponse.error;
+
+      const typedJobs = ((jobsResponse.data as (JobWithClient & { archived_at?: string | null })[]) ?? []).filter(
+        (job) => !job.archived_at
+      );
       const jobIds = typedJobs.map((job) => job.id);
 
       const [{ data: assigneesData, error: assigneesError }, { data: historyData, error: historyError }] =

@@ -10,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { type AgencyCommercialContext } from "@/lib/commercial";
 import type { Client, Database, Job, Task, UserProfile } from "@/lib/database.types";
+import { isMissingJobsArchivedAtColumn } from "@/lib/jobs-archive";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 type JobWithClient = Job & { client: { name: string } | null };
@@ -166,16 +167,22 @@ export default function JobsPage() {
 
       setProfile(currentProfile);
 
-      const [
-        { data: jobsData, error: jobsError },
-        { data: clientsData, error: clientsError },
-        { data: usersData, error: usersError }
-      ] = await Promise.all([
-        supabase
+      let jobsResponse = await supabase
+        .from("jobs")
+        .select("*, client:clients(name)")
+        .eq("agency_id", currentProfile.agency_id)
+        .is("archived_at", null)
+        .order("created_at", { ascending: false });
+
+      if (jobsResponse.error && isMissingJobsArchivedAtColumn(jobsResponse.error.message)) {
+        jobsResponse = await supabase
           .from("jobs")
           .select("*, client:clients(name)")
           .eq("agency_id", currentProfile.agency_id)
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false });
+      }
+
+      const [{ data: clientsData, error: clientsError }, { data: usersData, error: usersError }] = await Promise.all([
         supabase
           .from("clients")
           .select("*")
@@ -188,8 +195,8 @@ export default function JobsPage() {
           .order("name", { ascending: true })
       ]);
 
-      if (jobsError) {
-        setError(jobsError.message);
+      if (jobsResponse.error) {
+        setError(jobsResponse.error.message);
         return;
       }
 
@@ -203,7 +210,9 @@ export default function JobsPage() {
         return;
       }
 
-      setJobs((jobsData as JobWithClient[]) ?? []);
+      setJobs(
+        (((jobsResponse.data as (JobWithClient & { archived_at?: string | null })[]) ?? []).filter((job) => !job.archived_at) as JobWithClient[])
+      );
       setClients(clientsData ?? []);
       setUsers((usersData as TeamMember[]) ?? []);
 

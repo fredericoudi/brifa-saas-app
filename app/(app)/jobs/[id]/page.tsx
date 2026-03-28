@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { JobExitBar } from "@/components/jobs/job-exit-bar";
 import { JobViewTracker } from "@/components/jobs/job-view-tracker";
 import { AvatarGroup } from "@/components/ui/avatar-group";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +60,8 @@ const EVENT_TYPE_LABEL: Record<string, string> = {
   task_edited: "Tarefa editada",
   task_completed: "Tarefa concluída",
   job_status_changed: "Status do job alterado",
+  job_archived: "Job arquivado",
+  job_participation_finished: "Saída registrada",
   briefing_updated: "Briefing atualizado",
   file_attached: "Arquivo anexado"
 };
@@ -170,7 +173,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   const allTasks = typedTasks;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-28">
       <JobViewTracker
         jobId={typedJob.id}
         agencyId={profile.agency_id}
@@ -444,6 +447,8 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           </CardContent>
         </Card>
       ) : null}
+
+      {profile.role !== "admin" && currentUserTasks.length > 0 ? <JobExitBar jobId={typedJob.id} jobTitle={typedJob.title} /> : null}
     </div>
   );
 }

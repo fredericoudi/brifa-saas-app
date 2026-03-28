@@ -311,6 +311,8 @@ export type Database = {
           due_time: string | null;
           drive_folder_id: string | null;
           drive_folder_url: string | null;
+          archived_at: string | null;
+          archived_by: string | null;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -330,6 +332,8 @@ export type Database = {
           due_time?: string | null;
           drive_folder_id?: string | null;
           drive_folder_url?: string | null;
+          archived_at?: string | null;
+          archived_by?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -349,6 +353,8 @@ export type Database = {
           due_time?: string | null;
           drive_folder_id?: string | null;
           drive_folder_url?: string | null;
+          archived_at?: string | null;
+          archived_by?: string | null;
           created_by?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -364,6 +370,12 @@ export type Database = {
             foreignKeyName: "jobs_client_id_fkey";
             columns: ["client_id"];
             referencedRelation: "clients";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "jobs_archived_by_fkey";
+            columns: ["archived_by"];
+            referencedRelation: "users";
             referencedColumns: ["id"];
           }
         ];

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Agency, AgencySubscription, Database, Plan } from "@/lib/database.types";
+import { isMissingJobsArchivedAtColumn } from "@/lib/jobs-archive";
 
 export const COMMERCIAL_PLAN_CODES = ["starter", "pro", "agency", "growth"] as const;
 export type CommercialPlanCode = (typeof COMMERCIAL_PLAN_CODES)[number];
@@ -194,6 +195,30 @@ function mapAgencyStatusToSubscriptionStatus(status: Agency["status"]): Commerci
   return "active";
 }
 
+async function countActiveJobs({
+  supabase,
+  agencyId
+}: {
+  supabase: SupabaseClient<Database>;
+  agencyId: string;
+}) {
+  let response = await supabase
+    .from("jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("agency_id", agencyId)
+    .is("archived_at", null);
+
+  if (response.error && isMissingJobsArchivedAtColumn(response.error.message)) {
+    response = await supabase.from("jobs").select("id", { count: "exact", head: true }).eq("agency_id", agencyId);
+  }
+
+  if (response.error) {
+    throw new Error(response.error.message);
+  }
+
+  return response.count ?? 0;
+}
+
 async function buildLegacyCommercialContext({
   supabase,
   agencyId
@@ -201,14 +226,14 @@ async function buildLegacyCommercialContext({
   supabase: SupabaseClient<Database>;
   agencyId: string;
 }): Promise<AgencyCommercialContext> {
-  const [{ data: rawAgency, error: agencyError }, { count: usersCount }, { count: jobsCount }] = await Promise.all([
+  const [{ data: rawAgency, error: agencyError }, { count: usersCount }, jobsCount] = await Promise.all([
     supabase
       .from("agencies")
       .select("id, name, plan, status, created_at, trial_starts_at, trial_ends_at")
       .eq("id", agencyId)
       .maybeSingle(),
     supabase.from("users").select("id", { count: "exact", head: true }).eq("agency_id", agencyId),
-    supabase.from("jobs").select("id", { count: "exact", head: true }).eq("agency_id", agencyId)
+    countActiveJobs({ supabase, agencyId })
   ]);
 
   if (agencyError || !rawAgency) {
@@ -251,11 +276,11 @@ async function buildLegacyCommercialContext({
 
   const usage = {
     users: usersCount ?? 0,
-    jobs: jobsCount ?? 0
+    jobs: jobsCount
   };
-  const effectiveStatus = resolveEffectiveSubscriptionStatus(subscription);
+  const effectiveStatus: EffectiveSubscriptionStatus = resolveEffectiveSubscriptionStatus(subscription);
 
-  const baseContext = {
+  const baseContext: Pick<AgencyCommercialContext, "plan" | "subscription" | "usage" | "effectiveStatus"> = {
     plan,
     subscription,
     usage,
@@ -282,10 +307,10 @@ export async function getAgencyCommercialContext({
   supabase: SupabaseClient<Database>;
   agencyId: string;
 }): Promise<AgencyCommercialContext> {
-  const [{ data: rawSubscription, error: subscriptionError }, { count: usersCount }, { count: jobsCount }] = await Promise.all([
+  const [{ data: rawSubscription, error: subscriptionError }, { count: usersCount }, jobsCount] = await Promise.all([
     supabase.from("agency_subscriptions").select("*").eq("agency_id", agencyId).maybeSingle(),
     supabase.from("users").select("id", { count: "exact", head: true }).eq("agency_id", agencyId),
-    supabase.from("jobs").select("id", { count: "exact", head: true }).eq("agency_id", agencyId)
+    countActiveJobs({ supabase, agencyId })
   ]);
 
   if (subscriptionError || !rawSubscription) {
@@ -303,11 +328,11 @@ export async function getAgencyCommercialContext({
   const plan = rawPlan as Plan;
   const usage = {
     users: usersCount ?? 0,
-    jobs: jobsCount ?? 0
+    jobs: jobsCount
   };
-  const effectiveStatus = resolveEffectiveSubscriptionStatus(subscription);
+  const effectiveStatus: EffectiveSubscriptionStatus = resolveEffectiveSubscriptionStatus(subscription);
 
-  const baseContext = {
+  const baseContext: Pick<AgencyCommercialContext, "plan" | "subscription" | "usage" | "effectiveStatus"> = {
     plan,
     subscription,
     usage,

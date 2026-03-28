@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Pencil, X } from "lucide-react";
+import { Archive, Eye, EyeOff, Pencil } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { LoadingBlock } from "@/components/ui/loading";
 import { Select } from "@/components/ui/select";
 import type { Job, UserProfile } from "@/lib/database.types";
+import { isMissingJobsArchivedAtColumn } from "@/lib/jobs-archive";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { formatDate, JOB_STATUS_LABEL } from "@/lib/utils";
 
@@ -103,18 +104,29 @@ export default function TasksPage() {
       setProfile(typedProfile);
       setAssigneeFilter(typedProfile.role === "admin" ? "todos" : typedProfile.id);
 
+      let jobsResponse = await supabase
+        .from("jobs")
+        .select(
+          "id, agency_id, client_id, title, job_code, status, created_at, due_date, due_time, archived_at, client:clients(id, name)"
+        )
+        .eq("agency_id", typedProfile.agency_id)
+        .is("archived_at", null)
+        .order("created_at", { ascending: false });
+
+      if (jobsResponse.error && isMissingJobsArchivedAtColumn(jobsResponse.error.message)) {
+        jobsResponse = await supabase
+          .from("jobs")
+          .select("id, agency_id, client_id, title, job_code, status, created_at, due_date, due_time, client:clients(id, name)")
+          .eq("agency_id", typedProfile.agency_id)
+          .order("created_at", { ascending: false });
+      }
+
       const [
-        { data: jobsData, error: jobsError },
         { data: assigneesData, error: assigneesError },
         { data: viewsData, error: viewsError },
         { data: usersData, error: usersError },
         { data: clientsData, error: clientsError }
       ] = await Promise.all([
-        supabase
-          .from("jobs")
-          .select("id, agency_id, client_id, title, job_code, status, created_at, due_date, due_time, client:clients(id, name)")
-          .eq("agency_id", typedProfile.agency_id)
-          .order("created_at", { ascending: false }),
         supabase
           .from("task_assignees")
           .select("user_id, user:users(id, name), task:tasks!inner(job_id)")
@@ -132,7 +144,7 @@ export default function TasksPage() {
           .order("name", { ascending: true })
       ]);
 
-      if (jobsError) throw jobsError;
+      if (jobsResponse.error) throw jobsResponse.error;
       if (assigneesError) throw assigneesError;
       if (viewsError) throw viewsError;
       if (usersError) throw usersError;
@@ -166,7 +178,9 @@ export default function TasksPage() {
         viewsByJob.set(relation.job_id, current);
       }
 
-      const parsedJobs = ((jobsData as JobWithClient[]) ?? []).map((job) => {
+      const parsedJobs = ((jobsResponse.data as (JobWithClient & { archived_at?: string | null })[]) ?? [])
+        .filter((job) => !job.archived_at)
+        .map((job) => {
         const responsibleUsers = assigneesByJob.get(job.id) ?? new Set<string>();
         const seenUsers = viewsByJob.get(job.id) ?? new Set<string>();
         const seenByResponsible =
@@ -194,23 +208,25 @@ export default function TasksPage() {
     void loadData();
   }, []);
 
-  async function deleteJob(job: JobListItem) {
+  async function archiveJob(job: JobListItem) {
     if (profile?.role !== "admin") {
-      setError("Somente administradores podem excluir jobs.");
+      setError("Somente administradores podem arquivar jobs.");
       return;
     }
 
-    if (!confirm(`Deseja excluir o job "${job.title}"?`)) return;
+    if (!confirm(`Deseja arquivar o job "${job.title}"?`)) return;
 
     try {
       setError("");
-      const supabase = createBrowserSupabaseClient();
-      const { error: deleteError } = await supabase.from("jobs").delete().eq("id", job.id);
-      if (deleteError) throw deleteError;
+      const response = await fetch(`/api/jobs/${job.id}/archive`, {
+        method: "PATCH"
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Falha ao arquivar job.");
 
       setJobs((prev) => prev.filter((item) => item.id !== job.id));
-    } catch (deleteJobError) {
-      setError(deleteJobError instanceof Error ? deleteJobError.message : "Falha ao excluir job.");
+    } catch (archiveJobError) {
+      setError(archiveJobError instanceof Error ? archiveJobError.message : "Falha ao arquivar job.");
     }
   }
 
@@ -401,12 +417,12 @@ export default function TasksPage() {
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  void deleteJob(job);
+                                  void archiveJob(job);
                                 }}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-[16px] border border-rose-200 bg-rose-50 text-danger transition hover:bg-rose-100"
-                                aria-label={`Excluir ${job.title}`}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-[16px] border border-border bg-panel text-text transition hover:bg-panelAlt"
+                                aria-label={`Arquivar ${job.title}`}
                               >
-                                <X className="h-4 w-4" />
+                                <Archive className="h-4 w-4" />
                               </button>
                             </>
                           ) : null}
