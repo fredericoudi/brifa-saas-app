@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Database, UserProfile } from "@/lib/database.types";
-import { isMissingJobsArchivedAtColumn } from "@/lib/jobs-archive";
+import { getReadableErrorMessage, isMissingJobsArchivedAtColumn } from "@/lib/jobs-archive";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export async function PATCH(_request: Request, { params }: { params: { id: string } }) {
@@ -38,7 +38,7 @@ export async function PATCH(_request: Request, { params }: { params: { id: strin
       .maybeSingle();
 
     if (jobError) {
-      if (isMissingJobsArchivedAtColumn(jobError.message)) {
+      if (isMissingJobsArchivedAtColumn(jobError)) {
         return NextResponse.json(
           { error: "O arquivamento de jobs ficará disponível após rodar a migration mais recente no Supabase." },
           { status: 409 }
@@ -74,7 +74,7 @@ export async function PATCH(_request: Request, { params }: { params: { id: strin
       .eq("agency_id", typedProfile.agency_id);
 
     if (updateError) {
-      if (isMissingJobsArchivedAtColumn(updateError.message)) {
+      if (isMissingJobsArchivedAtColumn(updateError)) {
         return NextResponse.json(
           { error: "O arquivamento de jobs ficará disponível após rodar a migration mais recente no Supabase." },
           { status: 409 }
@@ -101,7 +101,7 @@ export async function PATCH(_request: Request, { params }: { params: { id: strin
     return NextResponse.json({ archived: true, archivedAt });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Falha ao arquivar job." },
+      { error: getReadableErrorMessage(error, "Falha ao arquivar job.") },
       { status: 500 }
     );
   }

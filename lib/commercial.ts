@@ -208,7 +208,7 @@ async function countActiveJobs({
     .eq("agency_id", agencyId)
     .is("archived_at", null);
 
-  if (response.error && isMissingJobsArchivedAtColumn(response.error.message)) {
+  if (response.error && isMissingJobsArchivedAtColumn(response.error)) {
     response = await supabase.from("jobs").select("id", { count: "exact", head: true }).eq("agency_id", agencyId);
   }
 

@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { LoadingBlock } from "@/components/ui/loading";
 import { Select } from "@/components/ui/select";
 import type { Job, UserProfile } from "@/lib/database.types";
-import { isMissingJobsArchivedAtColumn } from "@/lib/jobs-archive";
+import { getReadableErrorMessage, isMissingJobsArchivedAtColumn } from "@/lib/jobs-archive";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { formatDate, JOB_STATUS_LABEL } from "@/lib/utils";
 
@@ -113,7 +113,7 @@ export default function TasksPage() {
         .is("archived_at", null)
         .order("created_at", { ascending: false });
 
-      if (jobsResponse.error && isMissingJobsArchivedAtColumn(jobsResponse.error.message)) {
+      if (jobsResponse.error && isMissingJobsArchivedAtColumn(jobsResponse.error)) {
         jobsResponse = await supabase
           .from("jobs")
           .select("id, agency_id, client_id, title, job_code, status, created_at, due_date, due_time, client:clients(id, name)")
@@ -198,7 +198,7 @@ export default function TasksPage() {
       setClients((clientsData ?? []) as Array<{ id: string; name: string }>);
       setJobs(parsedJobs);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Erro ao carregar a lista de tarefas.");
+      setError(getReadableErrorMessage(loadError, "Erro ao carregar a lista de tarefas."));
     } finally {
       setLoading(false);
     }
@@ -226,7 +226,7 @@ export default function TasksPage() {
 
       setJobs((prev) => prev.filter((item) => item.id !== job.id));
     } catch (archiveJobError) {
-      setError(archiveJobError instanceof Error ? archiveJobError.message : "Falha ao arquivar job.");
+      setError(getReadableErrorMessage(archiveJobError, "Falha ao arquivar job."));
     }
   }
 

@@ -41,7 +41,7 @@ export default async function DashboardPage() {
     .eq("agency_id", profile.agency_id)
     .is("archived_at", null);
 
-  if (jobsResponse.error && isMissingJobsArchivedAtColumn(jobsResponse.error.message)) {
+  if (jobsResponse.error && isMissingJobsArchivedAtColumn(jobsResponse.error)) {
     jobsResponse = await supabase.from("jobs").select("id, status, due_date").eq("agency_id", profile.agency_id);
   }
 

@@ -174,7 +174,7 @@ export default function JobsPage() {
         .is("archived_at", null)
         .order("created_at", { ascending: false });
 
-      if (jobsResponse.error && isMissingJobsArchivedAtColumn(jobsResponse.error.message)) {
+      if (jobsResponse.error && isMissingJobsArchivedAtColumn(jobsResponse.error)) {
         jobsResponse = await supabase
           .from("jobs")
           .select("*, client:clients(name)")

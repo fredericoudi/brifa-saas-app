@@ -144,7 +144,7 @@ export default function JobsKanbanPage() {
         .is("archived_at", null)
         .order("created_at", { ascending: false });
 
-      if (jobsResponse.error && isMissingJobsArchivedAtColumn(jobsResponse.error.message)) {
+      if (jobsResponse.error && isMissingJobsArchivedAtColumn(jobsResponse.error)) {
         jobsResponse = await supabase
           .from("jobs")
           .select("id, agency_id, client_id, title, job_code, status, created_at, due_date, due_time, client:clients(id, name)")
