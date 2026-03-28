@@ -11,9 +11,9 @@ export const metadata: Metadata = {
   title: "Agência SaaS",
   description: "Plataforma de gestão para pequenas agências de publicidade.",
   icons: {
-    icon: "/favicon-brifa.svg",
-    shortcut: "/favicon-brifa.svg",
-    apple: "/favicon-brifa.svg"
+    icon: "/favicon-brifa.svg?v=2",
+    shortcut: "/favicon-brifa.svg?v=2",
+    apple: "/favicon-brifa.svg?v=2"
   }
 };
 

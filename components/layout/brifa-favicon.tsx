@@ -16,7 +16,7 @@ function upsertFaviconLink(rel: string, href: string) {
 
 export function BrifaFavicon() {
   useEffect(() => {
-    const href = "/favicon-brifa.svg?v=1";
+    const href = "/favicon-brifa.svg?v=2";
 
     upsertFaviconLink("icon", href);
     upsertFaviconLink("shortcut icon", href);

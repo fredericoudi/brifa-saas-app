@@ -6,9 +6,9 @@ import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import type { UserProfile } from "@/lib/database.types";
 import { AGENCY_BRAND_EVENT, type AgencyBrandEventDetail, getAgencyBrandStyleVars } from "@/lib/agency-branding";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { AgencyFavicon } from "@/components/layout/agency-favicon";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppTopbar } from "@/components/layout/app-topbar";
+import { BrifaFavicon } from "@/components/layout/brifa-favicon";
 import type { SidebarMode } from "@/components/layout/sidebar-mode-control";
 
 const baseNavItems = [
@@ -148,11 +148,7 @@ export function AppShell({
 
   return (
     <div className="min-h-screen bg-bg bg-dashboard-pattern" style={brandStyle}>
-      <AgencyFavicon
-        agencyName={agencyState.name}
-        logoUrl={agencyState.logoUrl}
-        updatedAt={agencyState.updatedAt}
-      />
+      <BrifaFavicon />
 
       <AppTopbar
         agencyName={agencyState.name}
