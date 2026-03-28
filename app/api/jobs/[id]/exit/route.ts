@@ -35,7 +35,7 @@ export async function POST(_request: Request, { params }: { params: { id: string
 
     const { data: job, error: jobError } = await admin
       .from("jobs")
-      .select("id, title, agency_id")
+      .select("id, title, agency_id, status")
       .eq("id", params.id)
       .eq("agency_id", typedProfile.agency_id)
       .maybeSingle();
@@ -78,7 +78,21 @@ export async function POST(_request: Request, { params }: { params: { id: string
 
     const assignedTaskIds = [...new Set((assignmentsData ?? []).map((assignment) => assignment.task_id))];
 
-    if (assignedTaskIds.length === 0) {
+    const { data: activeParticipationHistory, error: activeParticipationHistoryError } = await admin
+      .from("job_participants_history")
+      .select("id")
+      .eq("agency_id", typedProfile.agency_id)
+      .eq("job_id", params.id)
+      .eq("user_id", typedProfile.id)
+      .eq("is_active", true);
+
+    if (activeParticipationHistoryError) {
+      return NextResponse.json({ error: activeParticipationHistoryError.message }, { status: 400 });
+    }
+
+    const activeHistoryIds = [...new Set((activeParticipationHistory ?? []).map((entry) => entry.id))];
+
+    if (assignedTaskIds.length === 0 && activeHistoryIds.length === 0) {
       return NextResponse.json({ error: "Você não possui participação ativa neste job." }, { status: 400 });
     }
 
@@ -98,21 +112,44 @@ export async function POST(_request: Request, { params }: { params: { id: string
       }
     }
 
-    const { error: deleteAssignmentsError } = await admin
-      .from("task_assignees")
-      .delete()
-      .eq("agency_id", typedProfile.agency_id)
-      .eq("user_id", typedProfile.id)
-      .in("task_id", assignedTaskIds);
+    if (assignedTaskIds.length > 0) {
+      const { error: deleteAssignmentsError } = await admin
+        .from("task_assignees")
+        .delete()
+        .eq("agency_id", typedProfile.agency_id)
+        .eq("user_id", typedProfile.id)
+        .in("task_id", assignedTaskIds);
 
-    if (deleteAssignmentsError) {
-      return NextResponse.json({ error: deleteAssignmentsError.message }, { status: 400 });
+      if (deleteAssignmentsError) {
+        return NextResponse.json({ error: deleteAssignmentsError.message }, { status: 400 });
+      }
+    }
+
+    if (assignedTaskIds.length === 0 && activeHistoryIds.length > 0) {
+      const { error: historyUpdateError } = await admin
+        .from("job_participants_history")
+        .update({
+          ended_at: new Date().toISOString(),
+          end_reason: "removed",
+          latest_job_status: job.status,
+          is_active: false
+        })
+        .eq("agency_id", typedProfile.agency_id)
+        .eq("job_id", params.id)
+        .eq("user_id", typedProfile.id)
+        .eq("is_active", true);
+
+      if (historyUpdateError) {
+        return NextResponse.json({ error: historyUpdateError.message }, { status: 400 });
+      }
     }
 
     const summary =
       assignedTasks.length === 1
         ? `encerrou a participação na tarefa "${assignedTasks[0]?.title ?? "Tarefa"}"`
-        : `encerrou a participação em ${assignedTasks.length} tarefas`;
+        : assignedTasks.length > 1
+          ? `encerrou a participação em ${assignedTasks.length} tarefas`
+          : "encerrou a participação neste job";
 
     const { error: eventError } = await admin.from("job_events").insert({
       job_id: params.id,
@@ -128,7 +165,8 @@ export async function POST(_request: Request, { params }: { params: { id: string
     return NextResponse.json({
       ok: true,
       removedAssignments: assignedTaskIds.length,
-      concludedTasks: pendingTaskIds.length
+      concludedTasks: pendingTaskIds.length,
+      closedHistoryEntries: activeHistoryIds.length
     });
   } catch (error) {
     return NextResponse.json(

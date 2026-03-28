@@ -38,6 +38,7 @@ type TaskAssigneeRelation = {
 type ParticipantHistoryEntry = Pick<
   JobParticipantHistory,
   | "id"
+  | "user_id"
   | "user_name"
   | "task_title"
   | "assigned_at"
@@ -129,7 +130,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
     supabase
       .from("job_participants_history")
       .select(
-        "id, user_name, task_title, assigned_at, started_at, ended_at, start_job_status, latest_job_status, start_task_status, latest_task_status, end_reason, is_active, user:users(name, avatar_url, updated_at)"
+        "id, user_id, user_name, task_title, assigned_at, started_at, ended_at, start_job_status, latest_job_status, start_task_status, latest_task_status, end_reason, is_active, user:users(name, avatar_url, updated_at)"
       )
       .eq("agency_id", profile.agency_id)
       .eq("job_id", typedJob.id)
@@ -171,6 +172,10 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   );
   const currentUserTasks = typedTasks.filter((task) => assignedTaskIds.has(task.id));
   const allTasks = typedTasks;
+  const currentUserHasActiveParticipation = ((participantHistory ?? []) as ParticipantHistoryEntry[]).some(
+    (entry) => entry.user_id === profile.id && entry.is_active
+  );
+  const showExitBar = currentUserIsAssignee || currentUserHasActiveParticipation;
 
   return (
     <div className="space-y-6 pb-28">
@@ -448,7 +453,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         </Card>
       ) : null}
 
-      {currentUserIsAssignee ? <JobExitBar jobId={typedJob.id} jobTitle={typedJob.title} /> : null}
+      {showExitBar ? <JobExitBar jobId={typedJob.id} jobTitle={typedJob.title} /> : null}
     </div>
   );
 }
