@@ -172,11 +172,6 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   );
   const currentUserTasks = typedTasks.filter((task) => assignedTaskIds.has(task.id));
   const allTasks = typedTasks;
-  const currentUserHasActiveParticipation = ((participantHistory ?? []) as ParticipantHistoryEntry[]).some(
-    (entry) => entry.user_id === profile.id && entry.is_active
-  );
-  const showExitBar = currentUserIsAssignee || currentUserHasActiveParticipation;
-
   return (
     <div className="space-y-6 pb-28">
       <JobViewTracker
@@ -453,7 +448,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
         </Card>
       ) : null}
 
-      {showExitBar ? <JobExitBar jobId={typedJob.id} jobTitle={typedJob.title} /> : null}
+      {typedJob.status !== "finalizado" ? <JobExitBar jobId={typedJob.id} jobTitle={typedJob.title} /> : null}
     </div>
   );
 }

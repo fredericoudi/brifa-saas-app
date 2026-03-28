@@ -93,7 +93,13 @@ export async function POST(_request: Request, { params }: { params: { id: string
     const activeHistoryIds = [...new Set((activeParticipationHistory ?? []).map((entry) => entry.id))];
 
     if (assignedTaskIds.length === 0 && activeHistoryIds.length === 0) {
-      return NextResponse.json({ error: "Você não possui participação ativa neste job." }, { status: 400 });
+      return NextResponse.json({
+        ok: true,
+        removedAssignments: 0,
+        concludedTasks: 0,
+        closedHistoryEntries: 0,
+        alreadyClosed: true
+      });
     }
 
     const assignedTasks = allTasks.filter((task) => assignedTaskIds.includes(task.id));
@@ -151,15 +157,17 @@ export async function POST(_request: Request, { params }: { params: { id: string
           ? `encerrou a participação em ${assignedTasks.length} tarefas`
           : "encerrou a participação neste job";
 
-    const { error: eventError } = await admin.from("job_events").insert({
-      job_id: params.id,
-      user_id: typedProfile.id,
-      event_type: "job_participation_finished",
-      description: `${typedProfile.name} registrou saída do job e ${summary}.`
-    });
+    if (assignedTaskIds.length > 0 || activeHistoryIds.length > 0) {
+      const { error: eventError } = await admin.from("job_events").insert({
+        job_id: params.id,
+        user_id: typedProfile.id,
+        event_type: "job_participation_finished",
+        description: `${typedProfile.name} registrou saída do job e ${summary}.`
+      });
 
-    if (eventError) {
-      console.error("Falha ao registrar evento de saída do job:", eventError.message);
+      if (eventError) {
+        console.error("Falha ao registrar evento de saída do job:", eventError.message);
+      }
     }
 
     return NextResponse.json({
