@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, Briefcase, Building2, Kanban, LayoutDashboard, ListTodo, Settings, ShieldCheck, Users } from "lucide-react";
+import { Archive, BarChart3, Briefcase, Building2, Kanban, LayoutDashboard, ListTodo, Settings, ShieldCheck, Users } from "lucide-react";
 import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import type { UserProfile } from "@/lib/database.types";
 import { AGENCY_BRAND_EVENT, type AgencyBrandEventDetail, getAgencyBrandStyleVars } from "@/lib/agency-branding";
@@ -16,6 +16,7 @@ const baseNavItems = [
   { href: "/jobs", label: "Jobs", icon: Briefcase },
   { href: "/tasks", label: "Tarefas", icon: ListTodo },
   { href: "/jobs/kanban", label: "Kanban", icon: Kanban },
+  { href: "/archived", label: "Arquivados", icon: Archive },
   { href: "/clients", label: "Clientes", icon: Building2 },
   { href: "/team", label: "Equipe", icon: Users },
   { href: "/workload", label: "Produção da Equipe", icon: BarChart3 },
@@ -29,6 +30,7 @@ const titleMap: Record<string, string> = {
   jobs: "Jobs",
   kanban: "Kanban",
   tasks: "Tarefas",
+  archived: "Arquivados",
   clients: "Clientes",
   team: "Equipe",
   workload: "Produção da Equipe",
