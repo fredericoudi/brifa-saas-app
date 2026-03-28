@@ -43,7 +43,7 @@ export function JobExitBar({ jobId, jobTitle }: { jobId: string; jobTitle: strin
   }
 
   return (
-    <div className="sticky bottom-4 z-30 mt-8">
+    <div className="fixed bottom-3 left-3 right-3 z-40 md:bottom-4 md:left-4 md:right-4 lg:left-[calc(var(--content-offset)+16px)] lg:right-4">
       <div className="rounded-[28px] border border-border bg-white/95 px-4 py-4 shadow-[0_24px_80px_rgba(15,23,42,0.10)] backdrop-blur">
         <div className="flex items-center justify-end">
           <Button type="button" size="lg" onClick={handleExit} disabled={loading}>
