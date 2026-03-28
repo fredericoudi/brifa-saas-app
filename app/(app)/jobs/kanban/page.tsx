@@ -4,6 +4,7 @@ import Link from "next/link";
 import { DragDropContext, Draggable, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { CalendarDays, GripVertical, MoveRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { AvatarGroup } from "@/components/ui/avatar-group";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -303,6 +304,109 @@ export default function JobsKanbanPage() {
 
   if (loading) return <LoadingBlock text="Carregando Kanban de jobs..." />;
 
+  function renderJobCard({
+    job,
+    dragProvided,
+    dragSnapshot
+  }: {
+    job: KanbanJob;
+    dragProvided: Parameters<Parameters<typeof Draggable>[0]["children"]>[0];
+    dragSnapshot: Parameters<Parameters<typeof Draggable>[0]["children"]>[1];
+  }) {
+    const card = (
+      <div
+        ref={dragProvided.innerRef}
+        {...dragProvided.draggableProps}
+        className={cn(
+          "rounded-[22px] border border-border bg-white p-4 shadow-[0_14px_34px_-28px_rgba(15,23,42,0.4)] transition",
+          dragSnapshot.isDragging ? "relative z-[9999] rotate-[0.6deg] shadow-panel" : ""
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            {job.job_code ? (
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">{job.job_code}</p>
+            ) : null}
+            <p className="mt-1 text-sm font-semibold text-text">{job.title}</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Badge variant={buildStatusVariant(job.status)}>{JOB_STATUS_LABEL[job.status]}</Badge>
+            <div
+              {...dragProvided.dragHandleProps}
+              className={cn(
+                "inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-panelAlt text-muted",
+                canMoveJobs ? "cursor-grab active:cursor-grabbing" : "cursor-default"
+              )}
+              aria-label={`Mover ${job.title}`}
+            >
+              <GripVertical className="h-4 w-4" />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-3 text-xs text-muted">
+          <div>
+            <p className="font-medium uppercase tracking-[0.16em] text-muted/80">Cliente</p>
+            <p className="mt-1 text-sm text-text">{job.clientName ?? "Sem cliente"}</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-brand" />
+            <span>
+              Entrega: {formatDate(job.due_date)}
+              {job.due_time ? ` às ${job.due_time.slice(0, 5)}` : ""}
+            </span>
+          </div>
+
+          <div>
+            <p className="font-medium uppercase tracking-[0.16em] text-muted/80">Equipe</p>
+            {job.participants.length > 0 ? (
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <AvatarGroup
+                  users={job.participants.map((participant) => ({
+                    id: participant.id,
+                    name: participant.name,
+                    avatarUrl: participant.avatarUrl,
+                    updatedAt: participant.updatedAt
+                  }))}
+                />
+                <span className="truncate text-right text-xs text-muted">
+                  {job.currentAssignees.length > 0
+                    ? job.currentAssignees.map((participant) => participant.name).join(", ")
+                    : "Sem responsável ativo"}
+                </span>
+              </div>
+            ) : (
+              <p className="mt-1 text-sm text-muted">Nenhuma participação registrada ainda.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3 border-t border-border/70 pt-3">
+          <p className="text-[11px] uppercase tracking-[0.16em] text-muted">
+            Entrada: {new Date(job.created_at).toLocaleDateString("pt-BR")}
+          </p>
+          <Link
+            href={`/jobs/${job.id}`}
+            className="inline-flex items-center gap-1 text-sm font-medium text-brand transition hover:opacity-90"
+          >
+            Abrir
+            <MoveRight className="h-4 w-4" />
+          </Link>
+        </div>
+
+        {movingJobId === job.id ? <p className="mt-2 text-[11px] font-medium text-brand">Atualizando status...</p> : null}
+      </div>
+    );
+
+    if (dragSnapshot.isDragging && typeof document !== "undefined") {
+      return createPortal(card, document.body);
+    }
+
+    return card;
+  }
+
   return (
     <div className="space-y-6">
       {error ? <p className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">{error}</p> : null}
@@ -368,96 +472,7 @@ export default function JobsKanbanPage() {
 
                           {column.jobs.map((job, index) => (
                             <Draggable key={job.id} draggableId={job.id} index={index} isDragDisabled={!canMoveJobs}>
-                              {(dragProvided, dragSnapshot) => (
-                                <div
-                                  ref={dragProvided.innerRef}
-                                  {...dragProvided.draggableProps}
-                                  className={cn(
-                                    "rounded-[22px] border border-border bg-white p-4 shadow-[0_14px_34px_-28px_rgba(15,23,42,0.4)] transition",
-                                    dragSnapshot.isDragging ? "rotate-[0.6deg] shadow-panel" : ""
-                                  )}
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                      {job.job_code ? (
-                                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-                                          {job.job_code}
-                                        </p>
-                                      ) : null}
-                                      <p className="mt-1 text-sm font-semibold text-text">{job.title}</p>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-                                      <Badge variant={buildStatusVariant(job.status)}>{JOB_STATUS_LABEL[job.status]}</Badge>
-                                      <div
-                                        {...dragProvided.dragHandleProps}
-                                        className={cn(
-                                          "inline-flex h-8 w-8 items-center justify-center rounded-full border border-border bg-panelAlt text-muted",
-                                          canMoveJobs ? "cursor-grab active:cursor-grabbing" : "cursor-default"
-                                        )}
-                                        aria-label={`Mover ${job.title}`}
-                                      >
-                                        <GripVertical className="h-4 w-4" />
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  <div className="mt-4 space-y-3 text-xs text-muted">
-                                    <div>
-                                      <p className="font-medium uppercase tracking-[0.16em] text-muted/80">Cliente</p>
-                                      <p className="mt-1 text-sm text-text">{job.clientName ?? "Sem cliente"}</p>
-                                    </div>
-
-                                    <div className="flex items-center gap-2">
-                                      <CalendarDays className="h-4 w-4 text-brand" />
-                                      <span>
-                                        Entrega: {formatDate(job.due_date)}
-                                        {job.due_time ? ` às ${job.due_time.slice(0, 5)}` : ""}
-                                      </span>
-                                    </div>
-
-                                    <div>
-                                      <p className="font-medium uppercase tracking-[0.16em] text-muted/80">Equipe</p>
-                                      {job.participants.length > 0 ? (
-                                        <div className="mt-2 flex items-center justify-between gap-3">
-                                          <AvatarGroup
-                                            users={job.participants.map((participant) => ({
-                                              id: participant.id,
-                                              name: participant.name,
-                                              avatarUrl: participant.avatarUrl,
-                                              updatedAt: participant.updatedAt
-                                            }))}
-                                          />
-                                          <span className="truncate text-right text-xs text-muted">
-                                            {job.currentAssignees.length > 0
-                                              ? job.currentAssignees.map((participant) => participant.name).join(", ")
-                                              : "Sem responsável ativo"}
-                                          </span>
-                                        </div>
-                                      ) : (
-                                        <p className="mt-1 text-sm text-muted">Nenhuma participação registrada ainda.</p>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className="mt-4 flex items-center justify-between gap-3 border-t border-border/70 pt-3">
-                                    <p className="text-[11px] uppercase tracking-[0.16em] text-muted">
-                                      Entrada: {new Date(job.created_at).toLocaleDateString("pt-BR")}
-                                    </p>
-                                    <Link
-                                      href={`/jobs/${job.id}`}
-                                      className="inline-flex items-center gap-1 text-sm font-medium text-brand transition hover:opacity-90"
-                                    >
-                                      Abrir
-                                      <MoveRight className="h-4 w-4" />
-                                    </Link>
-                                  </div>
-
-                                  {movingJobId === job.id ? (
-                                    <p className="mt-2 text-[11px] font-medium text-brand">Atualizando status...</p>
-                                  ) : null}
-                                </div>
-                              )}
+                              {(dragProvided, dragSnapshot) => renderJobCard({ job, dragProvided, dragSnapshot })}
                             </Draggable>
                           ))}
                           {provided.placeholder}
