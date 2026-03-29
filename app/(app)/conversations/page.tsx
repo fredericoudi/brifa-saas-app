@@ -6,7 +6,7 @@ import { ConversationChannelManager } from "@/components/conversations/conversat
 import { getAgencyConversationOverview } from "@/lib/conversation-admin";
 import { requireAuth } from "@/lib/auth";
 import { getRequestOrigin } from "@/lib/master-server";
-import { CONVERSATION_PROVIDER_LABEL, isConversationProvider } from "@/services/conversation/providers";
+import { CONVERSATION_PROVIDER_LABEL, isConversationProvider } from "@/services/conversation/providers/catalog";
 
 function actionStatusVariant(status: string) {
   if (status === "success") return "success" as const;

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import type { SanitizedAgencyChannel } from "@/lib/conversation-admin";
-import { CONVERSATION_PROVIDER_LABEL } from "@/services/conversation/providers";
+import { CONVERSATION_PROVIDER_LABEL } from "@/services/conversation/providers/catalog";
 
 type ManageableConversationProvider = Exclude<keyof typeof CONVERSATION_PROVIDER_LABEL, "internal_test">;
 
