@@ -200,12 +200,168 @@ export type Database = {
           }
         ];
       };
+      conversations: {
+        Row: {
+          id: string;
+          agency_id: string;
+          user_id: string;
+          phone_number: string;
+          channel: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          agency_id: string;
+          user_id: string;
+          phone_number: string;
+          channel?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          agency_id?: string;
+          user_id?: string;
+          phone_number?: string;
+          channel?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conversations_agency_id_fkey";
+            columns: ["agency_id"];
+            referencedRelation: "agencies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conversations_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          agency_id: string;
+          user_id: string | null;
+          sender_type: "user" | "assistant" | "system";
+          content: string;
+          intent: string | null;
+          metadata: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          agency_id: string;
+          user_id?: string | null;
+          sender_type: "user" | "assistant" | "system";
+          content: string;
+          intent?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          agency_id?: string;
+          user_id?: string | null;
+          sender_type?: "user" | "assistant" | "system";
+          content?: string;
+          intent?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "messages_agency_id_fkey";
+            columns: ["agency_id"];
+            referencedRelation: "agencies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "messages_conversation_id_fkey";
+            columns: ["conversation_id"];
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "messages_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      ai_actions_log: {
+        Row: {
+          id: string;
+          agency_id: string;
+          user_id: string | null;
+          conversation_id: string | null;
+          action_type: string;
+          status: string;
+          payload: Json | null;
+          result: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          agency_id: string;
+          user_id?: string | null;
+          conversation_id?: string | null;
+          action_type: string;
+          status: string;
+          payload?: Json | null;
+          result?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          agency_id?: string;
+          user_id?: string | null;
+          conversation_id?: string | null;
+          action_type?: string;
+          status?: string;
+          payload?: Json | null;
+          result?: Json | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_actions_log_agency_id_fkey";
+            columns: ["agency_id"];
+            referencedRelation: "agencies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_actions_log_conversation_id_fkey";
+            columns: ["conversation_id"];
+            referencedRelation: "conversations";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "ai_actions_log_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       users: {
         Row: {
           id: string;
           agency_id: string;
           name: string;
           email: string;
+          phone_number: string | null;
+          whatsapp_enabled: boolean;
+          is_active: boolean;
           avatar_url: string | null;
           role: Database["public"]["Enums"]["user_role"];
           agency_role: string;
@@ -219,6 +375,9 @@ export type Database = {
           agency_id: string;
           name: string;
           email: string;
+          phone_number?: string | null;
+          whatsapp_enabled?: boolean;
+          is_active?: boolean;
           avatar_url?: string | null;
           role?: Database["public"]["Enums"]["user_role"];
           agency_role?: string;
@@ -232,6 +391,9 @@ export type Database = {
           agency_id?: string;
           name?: string;
           email?: string;
+          phone_number?: string | null;
+          whatsapp_enabled?: boolean;
+          is_active?: boolean;
           avatar_url?: string | null;
           role?: Database["public"]["Enums"]["user_role"];
           agency_role?: string;
@@ -868,6 +1030,9 @@ export type Agency = Database["public"]["Tables"]["agencies"]["Row"];
 export type Plan = Database["public"]["Tables"]["plans"]["Row"];
 export type AgencySubscription = Database["public"]["Tables"]["agency_subscriptions"]["Row"];
 export type AgencyIntegration = Database["public"]["Tables"]["agency_integrations"]["Row"];
+export type Conversation = Database["public"]["Tables"]["conversations"]["Row"];
+export type Message = Database["public"]["Tables"]["messages"]["Row"];
+export type AiActionLog = Database["public"]["Tables"]["ai_actions_log"]["Row"];
 export type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 export type Client = Database["public"]["Tables"]["clients"]["Row"];
 export type Job = Database["public"]["Tables"]["jobs"]["Row"];

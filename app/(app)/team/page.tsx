@@ -11,6 +11,7 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { AGENCY_ROLE_OPTIONS, normalizeAgencyRole } from "@/lib/agency-roles";
 import { type AgencyCommercialContext } from "@/lib/commercial";
 import type { Database, UserProfile } from "@/lib/database.types";
+import { isValidPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -22,9 +23,12 @@ export default function TeamPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [commercialContext, setCommercialContext] = useState<AgencyCommercialContext | null>(null);
   const [members, setMembers] = useState<UserProfile[]>([]);
+  const [memberPhones, setMemberPhones] = useState<Record<string, string>>({});
+  const [memberWhatsappEnabled, setMemberWhatsappEnabled] = useState<Record<string, boolean>>({});
   const [invitations, setInvitations] = useState<TeamInvitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [savingMemberField, setSavingMemberField] = useState<string | null>(null);
 
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
@@ -55,13 +59,14 @@ export default function TeamPage() {
         .select("*")
         .eq("id", user.id)
         .single();
+      const typedProfile = currentProfile as UserProfile | null;
 
-      if (profileError || !currentProfile) {
+      if (profileError || !typedProfile) {
         setError("Perfil não encontrado.");
         return;
       }
 
-      setProfile(currentProfile);
+      setProfile(typedProfile);
 
       const commercialResponse = await fetch("/api/subscription/context", {
         method: "GET",
@@ -81,18 +86,23 @@ export default function TeamPage() {
       const { data: teamData, error: teamError } = await supabase
         .from("users")
         .select("*")
-        .eq("agency_id", currentProfile.agency_id)
+        .eq("agency_id", typedProfile.agency_id)
         .order("created_at", { ascending: true });
+      const typedTeamData = (teamData ?? []) as UserProfile[];
 
       if (teamError) throw teamError;
 
-      setMembers(teamData ?? []);
+      setMembers(typedTeamData);
+      setMemberPhones(Object.fromEntries(typedTeamData.map((member) => [member.id, member.phone_number ?? ""])));
+      setMemberWhatsappEnabled(
+        Object.fromEntries(typedTeamData.map((member) => [member.id, member.whatsapp_enabled ?? true]))
+      );
 
-      if (currentProfile.role === "admin") {
+      if (typedProfile.role === "admin") {
         const { data: invitationData, error: invitationError } = await supabase
           .from("team_invitations")
           .select("*")
-          .eq("agency_id", currentProfile.agency_id)
+          .eq("agency_id", typedProfile.agency_id)
           .order("created_at", { ascending: false });
 
         if (invitationError) throw invitationError;
@@ -165,7 +175,14 @@ export default function TeamPage() {
     try {
       setError("");
       const supabase = createBrowserSupabaseClient();
-      const { error: updateError } = await supabase.from("users").update({ role }).eq("id", memberId);
+      const supabaseUsersUpdate = supabase.from("users") as never as {
+        update: (payload: Database["public"]["Tables"]["users"]["Update"]) => {
+          eq: (column: "id", value: string) => Promise<{ error: { message: string } | null }>;
+        };
+      };
+      const { error: updateError } = await supabaseUsersUpdate
+        .update({ role })
+        .eq("id", memberId);
       if (updateError) throw updateError;
       await loadData();
     } catch (roleError) {
@@ -182,7 +199,14 @@ export default function TeamPage() {
     try {
       setError("");
       const supabase = createBrowserSupabaseClient();
-      const { error: updateError } = await supabase.from("users").update({ agency_role: agencyRole }).eq("id", memberId);
+      const supabaseUsersUpdate = supabase.from("users") as never as {
+        update: (payload: Database["public"]["Tables"]["users"]["Update"]) => {
+          eq: (column: "id", value: string) => Promise<{ error: { message: string } | null }>;
+        };
+      };
+      const { error: updateError } = await supabaseUsersUpdate
+        .update({ agency_role: agencyRole })
+        .eq("id", memberId);
       if (updateError) throw updateError;
       await loadData();
     } catch (agencyRoleError) {
@@ -212,6 +236,77 @@ export default function TeamPage() {
       await loadData();
     } catch (removeError) {
       setError(removeError instanceof Error ? removeError.message : "Falha ao remover membro.");
+    }
+  }
+
+  async function handlePhoneSave(memberId: string) {
+    if (readOnlyMode) {
+      setError(invitePermission.message ?? "Sua assinatura está em modo de visualização. Alterações na equipe estão bloqueadas.");
+      return;
+    }
+
+    try {
+      setSavingMemberField(memberId);
+      setError("");
+      const supabase = createBrowserSupabaseClient();
+      const nextPhoneRaw = memberPhones[memberId] ?? "";
+      const normalizedPhone = normalizePhoneNumber(nextPhoneRaw);
+      const supabaseUsersUpdate = supabase.from("users") as never as {
+        update: (payload: Database["public"]["Tables"]["users"]["Update"]) => {
+          eq: (column: "id", value: string) => Promise<{ error: { message: string } | null }>;
+        };
+      };
+
+      if (nextPhoneRaw.trim().length > 0 && (!normalizedPhone || !isValidPhoneNumber(normalizedPhone))) {
+        throw new Error("Informe o WhatsApp no formato 5511999999999, usando apenas números.");
+      }
+
+      const { error: updateError } = await supabaseUsersUpdate
+        .update({ phone_number: normalizedPhone })
+        .eq("id", memberId);
+
+      if (updateError) throw updateError;
+
+      setMemberPhones((current) => ({
+        ...current,
+        [memberId]: normalizedPhone ?? ""
+      }));
+    } catch (phoneError) {
+      setError(phoneError instanceof Error ? phoneError.message : "Falha ao atualizar WhatsApp.");
+    } finally {
+      setSavingMemberField(null);
+    }
+  }
+
+  async function handleWhatsAppToggle(memberId: string, enabled: boolean) {
+    if (readOnlyMode) {
+      setError(invitePermission.message ?? "Sua assinatura está em modo de visualização. Alterações na equipe estão bloqueadas.");
+      return;
+    }
+
+    try {
+      setSavingMemberField(memberId);
+      setError("");
+      const supabase = createBrowserSupabaseClient();
+      const supabaseUsersUpdate = supabase.from("users") as never as {
+        update: (payload: Database["public"]["Tables"]["users"]["Update"]) => {
+          eq: (column: "id", value: string) => Promise<{ error: { message: string } | null }>;
+        };
+      };
+      const { error: updateError } = await supabaseUsersUpdate
+        .update({ whatsapp_enabled: enabled })
+        .eq("id", memberId);
+
+      if (updateError) throw updateError;
+
+      setMemberWhatsappEnabled((current) => ({
+        ...current,
+        [memberId]: enabled
+      }));
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : "Falha ao atualizar permissão de WhatsApp.");
+    } finally {
+      setSavingMemberField(null);
     }
   }
 
@@ -307,8 +402,8 @@ export default function TeamPage() {
                   className={cn(
                     "grid gap-3 rounded-xl border border-border p-3",
                     isAdmin
-                      ? "md:grid-cols-[minmax(0,1fr)_220px_180px_auto]"
-                      : "md:grid-cols-[minmax(0,1fr)_220px_180px]"
+                      ? "md:grid-cols-[minmax(0,1fr)_220px_180px_240px_auto]"
+                      : "md:grid-cols-[minmax(0,1fr)_220px_180px_240px]"
                   )}
                 >
                   <div className="flex items-center gap-3">
@@ -369,13 +464,58 @@ export default function TeamPage() {
                     )}
                   </div>
 
-                  <div className="flex justify-end">
-                    {isAdmin && member.id !== profile?.id ? (
-                      <Button variant="danger" size="sm" onClick={() => handleRemove(member.id)} disabled={readOnlyMode}>
+                  <div>
+                    {isAdmin ? (
+                      <>
+                        <label className="mb-1 block text-xs font-medium text-muted">WhatsApp</label>
+                        <Input
+                          value={memberPhones[member.id] ?? ""}
+                          onChange={(e) =>
+                            setMemberPhones((current) => ({
+                              ...current,
+                              [member.id]: e.target.value
+                            }))
+                          }
+                          onBlur={() => void handlePhoneSave(member.id)}
+                          placeholder="5511999999999"
+                          disabled={readOnlyMode}
+                        />
+                        <label className="mt-2 flex items-center gap-2 text-xs text-muted">
+                          <input
+                            type="checkbox"
+                            checked={memberWhatsappEnabled[member.id] ?? true}
+                            onChange={(e) => void handleWhatsAppToggle(member.id, e.target.checked)}
+                            disabled={readOnlyMode}
+                            className="h-4 w-4 rounded border-border text-brand focus:ring-brand"
+                          />
+                          Permitir uso via WhatsApp
+                        </label>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs font-medium text-muted">WhatsApp</p>
+                        <p className="text-sm">{member.phone_number || "Não informado"}</p>
+                        <p className="mt-1 text-xs text-muted">
+                          {member.whatsapp_enabled ? "Uso conversacional permitido" : "Uso conversacional bloqueado"}
+                        </p>
+                      </>
+                    )}
+                  </div>
+
+                  {isAdmin ? (
+                    <div className="flex justify-end">
+                      {member.id !== profile?.id ? (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleRemove(member.id)}
+                        disabled={readOnlyMode || savingMemberField === member.id}
+                      >
                         Remover
                       </Button>
-                    ) : null}
-                  </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>

@@ -21,7 +21,8 @@ import {
   formatPlanLimit,
   type AgencyCommercialContext
 } from "@/lib/commercial";
-import type { Agency, AgencyIntegration, UserProfile } from "@/lib/database.types";
+import type { Agency, AgencyIntegration, Database, UserProfile } from "@/lib/database.types";
+import { isValidPhoneNumber, normalizePhoneNumber } from "@/lib/phone";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils";
 
@@ -42,6 +43,8 @@ export default function SettingsPage() {
 
   const [name, setName] = useState("");
   const [weeklyCapacity, setWeeklyCapacity] = useState("40");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [whatsappEnabled, setWhatsappEnabled] = useState(true);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
@@ -81,8 +84,9 @@ export default function SettingsPage() {
         .select("*")
         .eq("id", user.id)
         .single();
+      const typedProfile = currentProfile as UserProfile | null;
 
-      if (profileError || !currentProfile) {
+      if (profileError || !typedProfile) {
         setError("Perfil não encontrado.");
         return;
       }
@@ -90,23 +94,26 @@ export default function SettingsPage() {
       const { data: currentAgency, error: agencyError } = await supabase
         .from("agencies")
         .select("*")
-        .eq("id", currentProfile.agency_id)
+        .eq("id", typedProfile.agency_id)
         .single();
+      const typedAgency = currentAgency as Agency | null;
 
-      if (agencyError || !currentAgency) {
+      if (agencyError || !typedAgency) {
         setError("Agência não encontrada.");
         return;
       }
 
-      setProfile(currentProfile);
-      setAgency(currentAgency);
-      setName(currentProfile.name);
-      setWeeklyCapacity(String(currentProfile.weekly_capacity_hours || 40));
-      setAvatarUrl(currentProfile.avatar_url ?? null);
+      setProfile(typedProfile);
+      setAgency(typedAgency);
+      setName(typedProfile.name);
+      setWeeklyCapacity(String(typedProfile.weekly_capacity_hours || 40));
+      setPhoneNumber(typedProfile.phone_number ?? "");
+      setWhatsappEnabled(typedProfile.whatsapp_enabled ?? true);
+      setAvatarUrl(typedProfile.avatar_url ?? null);
       setAvatarFile(null);
-      setAgencyName(currentAgency.name);
-      setAgencyLogoUrl(currentAgency.logo_url ?? null);
-      setBrandColor(currentAgency.brand_color ?? DEFAULT_BRAND_HEX);
+      setAgencyName(typedAgency.name);
+      setAgencyLogoUrl(typedAgency.logo_url ?? null);
+      setBrandColor(typedAgency.brand_color ?? DEFAULT_BRAND_HEX);
       setLogoFile(null);
 
       const commercialResponse = await fetch("/api/subscription/context", {
@@ -124,16 +131,17 @@ export default function SettingsPage() {
         setCommercialContext(null);
       }
 
-      if (currentProfile.role === "admin") {
+      if (typedProfile.role === "admin") {
         const { data: integrationData } = await supabase
           .from("agency_integrations")
           .select("*")
-          .eq("agency_id", currentProfile.agency_id)
+          .eq("agency_id", typedProfile.agency_id)
           .eq("provider", "google_drive")
           .maybeSingle();
+        const typedIntegration = integrationData as AgencyIntegration | null;
 
-        setGoogleDriveIntegration(integrationData ?? null);
-        setRootFolderId(integrationData?.root_folder_id ?? "");
+        setGoogleDriveIntegration(typedIntegration);
+        setRootFolderId(typedIntegration?.root_folder_id ?? "");
       } else {
         setGoogleDriveIntegration(null);
         setRootFolderId("");
@@ -203,6 +211,11 @@ export default function SettingsPage() {
       setSuccess("");
       const supabase = createBrowserSupabaseClient();
       let nextAvatarUrl = profile.avatar_url ?? null;
+      const normalizedPhone = normalizePhoneNumber(phoneNumber);
+
+      if (phoneNumber.trim().length > 0 && (!normalizedPhone || !isValidPhoneNumber(normalizedPhone))) {
+        throw new Error("Informe o WhatsApp no formato 5511999999999, usando apenas DDI + DDD + número.");
+      }
 
       if (avatarFile) {
         const avatarPath = `${profile.id}/avatar`;
@@ -218,16 +231,22 @@ export default function SettingsPage() {
         nextAvatarUrl = publicUrlData.publicUrl;
       }
 
-      const { error: updateError } = await supabase
-        .from("users")
+      const supabaseUsersUpdate = supabase.from("users") as never as {
+        update: (payload: Database["public"]["Tables"]["users"]["Update"]) => {
+          eq: (column: "id", value: string) => Promise<{ error: { message: string } | null }>;
+        };
+      };
+      const { error: profileUpdateError } = await supabaseUsersUpdate
         .update({
           name,
+          phone_number: normalizedPhone,
+          whatsapp_enabled: whatsappEnabled,
           avatar_url: nextAvatarUrl,
           weekly_capacity_hours: Number(weeklyCapacity || 0)
         })
         .eq("id", profile.id);
 
-      if (updateError) throw updateError;
+      if (profileUpdateError) throw profileUpdateError;
       setAvatarUrl(nextAvatarUrl);
       setAvatarFile(null);
       setSuccess("Perfil atualizado com sucesso.");
@@ -272,8 +291,14 @@ export default function SettingsPage() {
         nextLogoUrl = publicUrlData.publicUrl;
       }
 
-      const { data: updatedAgency, error: updateError } = await supabase
-        .from("agencies")
+      const supabaseAgencyUpdate = supabase.from("agencies") as never as {
+        update: (payload: Database["public"]["Tables"]["agencies"]["Update"]) => {
+          eq: (column: "id", value: string) => {
+            select: (query: "*") => { single: () => Promise<{ data: Agency | null; error: { message: string } | null }> };
+          };
+        };
+      };
+      const { data: updatedAgency, error: updateError } = await supabaseAgencyUpdate
         .update({
           name: agencyName,
           logo_url: nextLogoUrl,
@@ -282,22 +307,23 @@ export default function SettingsPage() {
         .eq("id", agency.id)
         .select("*")
         .single();
+      const typedUpdatedAgency = updatedAgency as Agency | null;
 
-      if (updateError || !updatedAgency) throw updateError;
+      if (updateError || !typedUpdatedAgency) throw updateError;
 
-      setAgency(updatedAgency);
-      setAgencyName(updatedAgency.name);
-      setAgencyLogoUrl(updatedAgency.logo_url ?? null);
-      setBrandColor(updatedAgency.brand_color ?? DEFAULT_BRAND_HEX);
+      setAgency(typedUpdatedAgency);
+      setAgencyName(typedUpdatedAgency.name);
+      setAgencyLogoUrl(typedUpdatedAgency.logo_url ?? null);
+      setBrandColor(typedUpdatedAgency.brand_color ?? DEFAULT_BRAND_HEX);
       setLogoFile(null);
 
       window.dispatchEvent(
         new CustomEvent(AGENCY_BRAND_EVENT, {
           detail: {
-            agencyName: updatedAgency.name,
-            logoUrl: updatedAgency.logo_url ?? null,
-            brandColor: updatedAgency.brand_color ?? null,
-            updatedAt: updatedAgency.updated_at
+            agencyName: typedUpdatedAgency.name,
+            logoUrl: typedUpdatedAgency.logo_url ?? null,
+            brandColor: typedUpdatedAgency.brand_color ?? null,
+            updatedAt: typedUpdatedAgency.updated_at
           }
         })
       );
@@ -498,6 +524,29 @@ export default function SettingsPage() {
                 onChange={(e) => setWeeklyCapacity(e.target.value)}
                 required
               />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted">WhatsApp</label>
+              <Input
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="5511999999999"
+              />
+              <p className="mt-1 text-xs text-muted">Armazene apenas números, com DDI. Ex.: 5511999999999.</p>
+            </div>
+            <div className="flex items-end">
+              <label className="flex w-full items-center justify-between rounded-2xl border border-border bg-panelAlt/35 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-text">Permitir uso do BRIFA via WhatsApp</p>
+                  <p className="mt-1 text-xs text-muted">Esse usuário poderá usar a futura camada conversacional.</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={whatsappEnabled}
+                  onChange={(e) => setWhatsappEnabled(e.target.checked)}
+                  className="h-5 w-5 rounded border-border text-brand focus:ring-brand"
+                />
+              </label>
             </div>
             <div className="md:col-span-2">
               <Button type="submit" disabled={savingProfile}>
