@@ -15,7 +15,12 @@ export type ResolvedPhoneUser = Pick<
   | "is_active"
 >;
 
-export async function resolveUserByPhone(phone: string) {
+export async function resolveUserByPhone(
+  phone: string,
+  options?: {
+    expectedAgencyId?: string;
+  }
+) {
   const normalizedPhone = normalizePhoneNumber(phone);
 
   if (!normalizedPhone || !isValidPhoneNumber(normalizedPhone)) {
@@ -44,6 +49,13 @@ export async function resolveUserByPhone(phone: string) {
   }
 
   const user = data as ResolvedPhoneUser;
+
+  if (options?.expectedAgencyId && user.agency_id !== options.expectedAgencyId) {
+    return {
+      ok: false as const,
+      message: "Seu número não está vinculado a esta agência. Fale com o administrador da sua agência."
+    };
+  }
 
   if (!user.is_active) {
     return {

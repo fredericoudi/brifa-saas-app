@@ -17,7 +17,10 @@ const PUBLIC_ROUTES = [
   "/reset-password",
   "/auth/callback",
   "/ativar",
-  "/api/agency-activation"
+  "/api/agency-activation",
+  "/api/conversation/test",
+  "/api/conversation/process",
+  "/api/whatsapp/webhook"
 ];
 
 const PLATFORM_ROUTE_PREFIXES = ["/platform", "/master", "/master-panel", "/admin"];

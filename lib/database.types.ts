@@ -200,6 +200,217 @@ export type Database = {
           }
         ];
       };
+      agency_channels: {
+        Row: {
+          id: string;
+          agency_id: string;
+          provider: string;
+          phone_number: string;
+          external_account_id: string | null;
+          access_token: string | null;
+          refresh_token: string | null;
+          webhook_verify_token: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          agency_id: string;
+          provider: string;
+          phone_number: string;
+          external_account_id?: string | null;
+          access_token?: string | null;
+          refresh_token?: string | null;
+          webhook_verify_token?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          agency_id?: string;
+          provider?: string;
+          phone_number?: string;
+          external_account_id?: string | null;
+          access_token?: string | null;
+          refresh_token?: string | null;
+          webhook_verify_token?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "agency_channels_agency_id_fkey";
+            columns: ["agency_id"];
+            referencedRelation: "agencies";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      conversation_threads: {
+        Row: {
+          id: string;
+          agency_id: string;
+          user_id: string | null;
+          channel_id: string | null;
+          external_contact_id: string;
+          channel: string;
+          started_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          agency_id: string;
+          user_id?: string | null;
+          channel_id?: string | null;
+          external_contact_id: string;
+          channel: string;
+          started_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          agency_id?: string;
+          user_id?: string | null;
+          channel_id?: string | null;
+          external_contact_id?: string;
+          channel?: string;
+          started_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conversation_threads_agency_id_fkey";
+            columns: ["agency_id"];
+            referencedRelation: "agencies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conversation_threads_channel_id_fkey";
+            columns: ["channel_id"];
+            referencedRelation: "agency_channels";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conversation_threads_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      conversation_messages: {
+        Row: {
+          id: string;
+          thread_id: string;
+          agency_id: string;
+          user_id: string | null;
+          sender_type: "user" | "assistant" | "system";
+          message_text: string;
+          intent: string | null;
+          metadata: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          thread_id: string;
+          agency_id: string;
+          user_id?: string | null;
+          sender_type: "user" | "assistant" | "system";
+          message_text: string;
+          intent?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          thread_id?: string;
+          agency_id?: string;
+          user_id?: string | null;
+          sender_type?: "user" | "assistant" | "system";
+          message_text?: string;
+          intent?: string | null;
+          metadata?: Json | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conversation_messages_agency_id_fkey";
+            columns: ["agency_id"];
+            referencedRelation: "agencies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conversation_messages_thread_id_fkey";
+            columns: ["thread_id"];
+            referencedRelation: "conversation_threads";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conversation_messages_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      conversation_actions: {
+        Row: {
+          id: string;
+          agency_id: string;
+          thread_id: string | null;
+          user_id: string | null;
+          action_type: string;
+          status: string;
+          payload: Json | null;
+          result: Json | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          agency_id: string;
+          thread_id?: string | null;
+          user_id?: string | null;
+          action_type: string;
+          status: string;
+          payload?: Json | null;
+          result?: Json | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          agency_id?: string;
+          thread_id?: string | null;
+          user_id?: string | null;
+          action_type?: string;
+          status?: string;
+          payload?: Json | null;
+          result?: Json | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "conversation_actions_agency_id_fkey";
+            columns: ["agency_id"];
+            referencedRelation: "agencies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conversation_actions_thread_id_fkey";
+            columns: ["thread_id"];
+            referencedRelation: "conversation_threads";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "conversation_actions_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       conversations: {
         Row: {
           id: string;
@@ -1030,6 +1241,10 @@ export type Agency = Database["public"]["Tables"]["agencies"]["Row"];
 export type Plan = Database["public"]["Tables"]["plans"]["Row"];
 export type AgencySubscription = Database["public"]["Tables"]["agency_subscriptions"]["Row"];
 export type AgencyIntegration = Database["public"]["Tables"]["agency_integrations"]["Row"];
+export type AgencyChannel = Database["public"]["Tables"]["agency_channels"]["Row"];
+export type ConversationThread = Database["public"]["Tables"]["conversation_threads"]["Row"];
+export type ConversationRecordMessage = Database["public"]["Tables"]["conversation_messages"]["Row"];
+export type ConversationAction = Database["public"]["Tables"]["conversation_actions"]["Row"];
 export type Conversation = Database["public"]["Tables"]["conversations"]["Row"];
 export type Message = Database["public"]["Tables"]["messages"]["Row"];
 export type AiActionLog = Database["public"]["Tables"]["ai_actions_log"]["Row"];

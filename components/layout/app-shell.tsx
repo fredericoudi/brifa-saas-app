@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Archive, BarChart3, Briefcase, Building2, Kanban, LayoutDashboard, ListTodo, Settings, ShieldCheck, Users } from "lucide-react";
+import { Archive, BarChart3, Briefcase, Building2, Kanban, LayoutDashboard, ListTodo, MessageSquareText, Settings, ShieldCheck, type LucideIcon, Users } from "lucide-react";
 import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import type { UserProfile } from "@/lib/database.types";
 import { AGENCY_BRAND_EVENT, type AgencyBrandEventDetail, getAgencyBrandStyleVars } from "@/lib/agency-branding";
@@ -11,19 +11,27 @@ import { AppTopbar } from "@/components/layout/app-topbar";
 import { BrifaFavicon } from "@/components/layout/brifa-favicon";
 import type { SidebarMode } from "@/components/layout/sidebar-mode-control";
 
-const baseNavItems = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  adminOnly?: boolean;
+};
+
+const baseNavItems: readonly NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
   { href: "/tasks", label: "Tarefas", icon: ListTodo },
   { href: "/jobs/kanban", label: "Kanban", icon: Kanban },
   { href: "/archived", label: "Arquivados", icon: Archive },
+  { href: "/conversations", label: "Conversas", icon: MessageSquareText, adminOnly: true },
   { href: "/clients", label: "Clientes", icon: Building2 },
   { href: "/team", label: "Equipe", icon: Users },
   { href: "/workload", label: "Produção da Equipe", icon: BarChart3 },
   { href: "/settings", label: "Configurações", icon: Settings }
 ] as const;
 
-const masterNavItem = { href: "/platform", label: "Painel Master", icon: ShieldCheck } as const;
+const masterNavItem: NavItem = { href: "/platform", label: "Painel Master", icon: ShieldCheck };
 
 const titleMap: Record<string, string> = {
   dashboard: "Dashboard",
@@ -31,6 +39,7 @@ const titleMap: Record<string, string> = {
   kanban: "Kanban",
   tasks: "Tarefas",
   archived: "Arquivados",
+  conversations: "Conversas",
   clients: "Clientes",
   team: "Equipe",
   workload: "Produção da Equipe",
@@ -75,12 +84,14 @@ export function AppShell({
   }, [pathname]);
 
   const navItems = useMemo(() => {
+    const filteredItems = baseNavItems.filter((item) => !item.adminOnly || profile.role === "admin");
+
     if (profile.platform_role === "super_admin") {
-      return [...baseNavItems, masterNavItem];
+      return [...filteredItems, masterNavItem];
     }
 
-    return [...baseNavItems];
-  }, [profile.platform_role]);
+    return [...filteredItems];
+  }, [profile.platform_role, profile.role]);
 
   const desktopExpanded = sidebarMode === "expanded" || (sidebarMode === "hover" && hoverExpanded);
   const desktopWidth = desktopExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH;
