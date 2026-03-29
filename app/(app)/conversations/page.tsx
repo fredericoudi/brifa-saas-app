@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
 import { ConversationChannelManager } from "@/components/conversations/conversation-channel-manager";
@@ -28,7 +30,7 @@ function getConversationProviderLabel(provider: string | null | undefined) {
 export default async function ConversationsPage() {
   const { profile } = await requireAuth();
 
-  if (profile.role !== "admin") {
+  if (profile.role !== "admin" && profile.platform_role !== "super_admin") {
     redirect("/dashboard");
   }
 
@@ -57,6 +59,22 @@ export default async function ConversationsPage() {
         <MetricCard title="Mensagens" value={overview?.metrics.totalMessages ?? 0} subtitle="Entrada e resposta" />
         <MetricCard title="Ações" value={overview?.metrics.totalActions ?? 0} subtitle="Execuções do operador" />
       </section>
+
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold">Sandbox interno</h2>
+              <p className="mt-1 text-sm text-muted">
+                Teste o operador conversacional com usuários reais da equipe, veja intenções, entidades e logs sem depender do WhatsApp externo.
+              </p>
+            </div>
+            <Link href="/conversations/sandbox">
+              <Button>Abrir sandbox</Button>
+            </Link>
+          </div>
+        </CardHeader>
+      </Card>
 
       {loadError ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">

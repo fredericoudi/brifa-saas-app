@@ -18,7 +18,10 @@ const bodySchema = z.object({
   isActive: z.boolean().default(false)
 });
 
-type AgencyAdminProfile = Pick<Database["public"]["Tables"]["users"]["Row"], "id" | "agency_id" | "role">;
+type AgencyAdminProfile = Pick<
+  Database["public"]["Tables"]["users"]["Row"],
+  "id" | "agency_id" | "role" | "platform_role"
+>;
 
 async function requireAgencyAdmin() {
   const supabase = createServerSupabaseClient();
@@ -35,7 +38,7 @@ async function requireAgencyAdmin() {
 
   const { data: profile, error: profileError } = await supabase
     .from("users")
-    .select("id, agency_id, role")
+    .select("id, agency_id, role, platform_role")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -48,7 +51,7 @@ async function requireAgencyAdmin() {
     };
   }
 
-  if (typedProfile.role !== "admin") {
+  if (typedProfile.role !== "admin" && typedProfile.platform_role !== "super_admin") {
     return {
       errorResponse: NextResponse.json({ error: "Apenas administradores podem configurar o WhatsApp." }, { status: 403 }),
       profile: null

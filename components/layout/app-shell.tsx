@@ -84,7 +84,9 @@ export function AppShell({
   }, [pathname]);
 
   const navItems = useMemo(() => {
-    const filteredItems = baseNavItems.filter((item) => !item.adminOnly || profile.role === "admin");
+    const filteredItems = baseNavItems.filter(
+      (item) => !item.adminOnly || profile.role === "admin" || profile.platform_role === "super_admin"
+    );
 
     if (profile.platform_role === "super_admin") {
       return [...filteredItems, masterNavItem];
