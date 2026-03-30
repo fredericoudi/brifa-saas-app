@@ -14,6 +14,9 @@ export function AppTopbar({
   roleLabel,
   pageTitle,
   showMasterLink,
+  masterHref,
+  profileHref,
+  agencyHref,
   signingOut,
   onSignOut,
   onMobileMenuToggle,
@@ -28,6 +31,9 @@ export function AppTopbar({
   roleLabel: string;
   pageTitle: string;
   showMasterLink: boolean;
+  masterHref: string;
+  profileHref: string;
+  agencyHref: string;
   signingOut: boolean;
   onSignOut: () => Promise<void>;
   onMobileMenuToggle: () => void;
@@ -74,6 +80,9 @@ export function AppTopbar({
           profileUpdatedAt={profileUpdatedAt}
           roleLabel={roleLabel}
           showMasterLink={showMasterLink}
+          masterHref={masterHref}
+          profileHref={profileHref}
+          agencyHref={agencyHref}
           signingOut={signingOut}
           onSignOut={onSignOut}
         />
