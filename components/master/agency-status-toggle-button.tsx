@@ -9,12 +9,13 @@ export function AgencyStatusToggleButton({
 }: {
   agency: {
     id: string;
-    status: "active" | "inactive" | "suspended" | "trial";
+    status: "active" | "inactive" | "suspended" | "trial" | "pending_payment";
   };
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const nextStatus = agency.status === "active" || agency.status === "trial" ? "inactive" : "active";
+  const nextStatus =
+    agency.status === "active" || agency.status === "trial" || agency.status === "pending_payment" ? "inactive" : "active";
 
   async function handleToggle() {
     try {

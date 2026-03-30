@@ -27,9 +27,11 @@ const PUBLIC_ROUTES = [
   "/auth/callback",
   "/ativar",
   "/api/agency-activation",
+  "/api/commercial/signup",
   "/api/conversation/test",
   "/api/conversation/process",
-  "/api/whatsapp/webhook"
+  "/api/whatsapp/webhook",
+  "/api/payments/asaas/webhook"
 ];
 
 const PLATFORM_ROUTE_PREFIXES = ["/platform", "/app/platform", "/master", "/master-panel", "/admin"];

@@ -29,6 +29,9 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
     notFound();
   }
 
+  const agencyBlocked =
+    agency.status === "inactive" || agency.status === "suspended" || agency.status === "pending_payment";
+
   const user = authData.user;
 
   if (user) {
@@ -38,7 +41,7 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
     const isSuperAdminPreview = profile?.platform_role === "super_admin";
     const agencyDashboardPath = resolveAgencyAppPath(agency.slug, "/dashboard") ?? "/dashboard";
 
-    if (!isSuperAdminPreview && profile?.agency_id === agency.id) {
+    if (!agencyBlocked && !isSuperAdminPreview && profile?.agency_id === agency.id) {
       redirect(agencyDashboardPath);
     }
 
@@ -54,7 +57,6 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
   }
 
   const brandStyle = getAgencyBrandStyleVars(agency.brand_color);
-  const agencyBlocked = agency.status === "inactive" || agency.status === "suspended";
 
   return (
     <main className="min-h-screen bg-white" style={brandStyle as CSSProperties}>
@@ -95,13 +97,21 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
                     <div>
                       <h2 className="text-[3rem] font-semibold tracking-tight text-text">Acesso temporariamente indisponível</h2>
                       <p className="mt-4 text-lg leading-8 text-muted">
-                        O portal de <strong>{agency.name}</strong> está {agency.status === "suspended" ? "suspenso" : "inativo"} no momento.
+                        O portal de <strong>{agency.name}</strong> está{" "}
+                        {agency.status === "suspended"
+                          ? "suspenso"
+                          : agency.status === "pending_payment"
+                            ? "aguardando confirmação de pagamento"
+                            : "inativo"}{" "}
+                        no momento.
                       </p>
                     </div>
 
                     <div className="rounded-[28px] border border-border bg-panelAlt/60 p-6">
                       <p className="text-sm leading-7 text-muted">
-                        Entre em contato com o administrador da plataforma para regularizar o acesso desta agência.
+                        {agency.status === "pending_payment"
+                          ? "Assim que a cobrança recorrente for confirmada, o acesso da agência será liberado e o responsável receberá o link por e-mail."
+                          : "Entre em contato com o administrador da plataforma para regularizar o acesso desta agência."}
                       </p>
                     </div>
                   </div>

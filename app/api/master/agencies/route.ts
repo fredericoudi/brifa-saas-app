@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type { Agency, AgencyInvitation } from "@/lib/database.types";
+import type { Agency, AgencyInvitation, Database } from "@/lib/database.types";
 import { isReservedAgencySlug } from "@/lib/agency-routing";
 import { COMMERCIAL_PLAN_CODES, COMMERCIAL_SUBSCRIPTION_STATUSES } from "@/lib/commercial";
 import { buildAgencyActivationLink, computeActivationExpiry, generateActivationToken, normalizeAgencySlug } from "@/lib/master";
@@ -29,6 +29,13 @@ function toTimestamp(value: string | null | undefined) {
   }
 
   return date.toISOString();
+}
+
+function resolveAgencyOperationalStatus(status: Database["public"]["Enums"]["subscription_status"]) {
+  if (status === "suspended") return "suspended" as const;
+  if (status === "trial") return "trial" as const;
+  if (status === "pending_payment") return "pending_payment" as const;
+  return "active" as const;
 }
 
 export async function POST(request: Request) {
@@ -81,7 +88,7 @@ export async function POST(request: Request) {
         name: parsed.data.name,
         slug: normalizedSlug,
         plan: parsed.data.plan === "growth" ? "growth" : (parsed.data.plan as Agency["plan"]),
-        status: "active",
+        status: resolveAgencyOperationalStatus(parsed.data.status),
         trial_starts_at: parsed.data.status === "trial" ? trialStartsAt ?? new Date().toISOString() : trialStartsAt,
         trial_ends_at: parsed.data.status === "trial" ? trialEndsAt : null
       })

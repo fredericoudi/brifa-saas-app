@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type { Agency, AgencyInvitation } from "@/lib/database.types";
+import type { Agency, AgencyInvitation, Database } from "@/lib/database.types";
 import { isReservedAgencySlug } from "@/lib/agency-routing";
 import { COMMERCIAL_PLAN_CODES, COMMERCIAL_SUBSCRIPTION_STATUSES } from "@/lib/commercial";
 import { buildAgencyActivationLink, computeActivationExpiry, generateActivationToken, normalizeAgencySlug } from "@/lib/master";
@@ -30,6 +30,13 @@ function toTimestamp(value: string | null | undefined) {
   }
 
   return date.toISOString();
+}
+
+function resolveAgencyOperationalStatus(status: Database["public"]["Enums"]["subscription_status"]) {
+  if (status === "suspended") return "suspended" as const;
+  if (status === "trial") return "trial" as const;
+  if (status === "pending_payment") return "pending_payment" as const;
+  return "active" as const;
 }
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
@@ -95,7 +102,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       .update({
         name: parsed.data.name,
         slug: normalizedSlug,
-        plan: parsed.data.plan === "growth" ? "growth" : (parsed.data.plan as Agency["plan"])
+        plan: parsed.data.plan === "growth" ? "growth" : (parsed.data.plan as Agency["plan"]),
+        status: resolveAgencyOperationalStatus(parsed.data.status)
       })
       .eq("id", params.id)
       .select("*")

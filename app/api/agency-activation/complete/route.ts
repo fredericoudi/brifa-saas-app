@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { findAgencyActivation } from "@/lib/agency-activation";
+import { findAgencyActivation, findAgencyOnboardingActivation } from "@/lib/agency-activation";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 const activationSchema = z
   .object({
     agency: z.string().trim().min(1),
-    token: z.string().trim().min(1),
+    token: z.string().trim().min(1).optional(),
+    onboardingToken: z.string().trim().min(1).optional(),
     name: z.string().trim().min(2).max(120),
     password: z.string().min(6).max(128),
     confirmPassword: z.string().min(6).max(128)
+  })
+  .refine((data) => Boolean(data.token || data.onboardingToken), {
+    path: ["token"],
+    message: "Link de ativação inválido."
   })
   .refine((data) => data.password === data.confirmPassword, {
     path: ["confirmPassword"],
@@ -28,30 +33,48 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminSupabaseClient();
-    const activation = await findAgencyActivation(admin, parsed.data.agency, parsed.data.token);
+    const isOnboardingFlow = Boolean(parsed.data.onboardingToken);
+    const activation = isOnboardingFlow
+      ? await findAgencyOnboardingActivation(admin, parsed.data.agency, parsed.data.onboardingToken!)
+      : await findAgencyActivation(admin, parsed.data.agency, parsed.data.token!);
 
-    if (!activation.agency || !activation.invitation) {
+    if (!activation.agency || (isOnboardingFlow ? !activation.onboardingToken : !activation.invitation)) {
       return NextResponse.json({ error: "Link de ativação inválido ou não encontrado." }, { status: 404 });
     }
 
-    if (activation.invitation.status !== "pending") {
+    if (!isOnboardingFlow && activation.invitation?.status !== "pending") {
       return NextResponse.json({ error: "Esse link de ativação já foi utilizado ou cancelado." }, { status: 400 });
     }
 
+    if (isOnboardingFlow && activation.onboardingToken?.used_at) {
+      return NextResponse.json({ error: "Esse link de onboarding já foi utilizado." }, { status: 400 });
+    }
+
     if (activation.expired) {
-      await admin
-        .from("agency_invitations")
-        .update({
-          status: "expired",
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", activation.invitation.id);
+      if (!isOnboardingFlow && activation.invitation) {
+        await admin
+          .from("agency_invitations")
+          .update({
+            status: "expired",
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", activation.invitation.id);
+      }
 
       return NextResponse.json({ error: "Esse link de ativação expirou. Solicite um novo link." }, { status: 400 });
     }
 
+    if (isOnboardingFlow && activation.agency.status !== "active") {
+      return NextResponse.json(
+        { error: "A agência ainda não está liberada. Aguarde a confirmação do pagamento." },
+        { status: 400 }
+      );
+    }
+
+    const activationEmail = isOnboardingFlow ? activation.onboardingToken!.email : activation.invitation!.email;
+
     const { data: createdUser, error: createUserError } = await admin.auth.admin.createUser({
-      email: activation.invitation.email,
+      email: activationEmail,
       password: parsed.data.password,
       email_confirm: true,
       user_metadata: {
@@ -70,18 +93,32 @@ export async function POST(request: Request) {
     }
 
     const usedAt = new Date().toISOString();
-    await admin
-      .from("agency_invitations")
-      .update({
-        status: "used",
-        used_at: usedAt,
-        updated_at: usedAt
-      })
-      .eq("id", activation.invitation.id);
+    if (isOnboardingFlow) {
+      await Promise.all([
+        admin.from("onboarding_tokens").update({ used_at: usedAt }).eq("id", activation.onboardingToken!.id),
+        admin
+          .from("agencies")
+          .update({
+            owner_name: parsed.data.name,
+            owner_email: activationEmail,
+            activated_at: usedAt
+          })
+          .eq("id", activation.agency.id)
+      ]);
+    } else {
+      await admin
+        .from("agency_invitations")
+        .update({
+          status: "used",
+          used_at: usedAt,
+          updated_at: usedAt
+        })
+        .eq("id", activation.invitation!.id);
+    }
 
     return NextResponse.json({
       success: true,
-      email: activation.invitation.email
+      email: activationEmail
     });
   } catch (error) {
     return NextResponse.json(

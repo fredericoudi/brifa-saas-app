@@ -18,9 +18,16 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     redirect("/login?error=agency_not_found");
   }
 
-  const agencyBlocked = agency.status === "inactive" || agency.status === "suspended";
+  const agencyBlocked =
+    agency.status === "inactive" || agency.status === "suspended" || agency.status === "pending_payment";
   if (agencyBlocked && profile.platform_role !== "super_admin") {
-    redirect(`/login?error=${agency.status === "suspended" ? "agency_suspended" : "agency_inactive"}`);
+    const error =
+      agency.status === "suspended"
+        ? "agency_suspended"
+        : agency.status === "pending_payment"
+          ? "agency_payment_pending"
+          : "agency_inactive";
+    redirect(`/login?error=${error}`);
   }
 
   const signOutPath = resolveAgencyPortalPath(agency.slug) ?? "/";

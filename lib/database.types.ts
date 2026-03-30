@@ -16,6 +16,10 @@ export type Database = {
           slug: string;
           plan: Database["public"]["Enums"]["agency_plan"];
           status: Database["public"]["Enums"]["agency_status"];
+          owner_name: string | null;
+          owner_email: string | null;
+          owner_phone: string | null;
+          activated_at: string | null;
           trial_starts_at: string | null;
           trial_ends_at: string | null;
           logo_url: string | null;
@@ -29,6 +33,10 @@ export type Database = {
           slug?: string;
           plan?: Database["public"]["Enums"]["agency_plan"];
           status?: Database["public"]["Enums"]["agency_status"];
+          owner_name?: string | null;
+          owner_email?: string | null;
+          owner_phone?: string | null;
+          activated_at?: string | null;
           trial_starts_at?: string | null;
           trial_ends_at?: string | null;
           logo_url?: string | null;
@@ -42,6 +50,10 @@ export type Database = {
           slug?: string;
           plan?: Database["public"]["Enums"]["agency_plan"];
           status?: Database["public"]["Enums"]["agency_status"];
+          owner_name?: string | null;
+          owner_email?: string | null;
+          owner_phone?: string | null;
+          activated_at?: string | null;
           trial_starts_at?: string | null;
           trial_ends_at?: string | null;
           logo_url?: string | null;
@@ -55,8 +67,11 @@ export type Database = {
         Row: {
           id: string;
           code: string;
+          slug: string;
           name: string;
           price_monthly: number;
+          price_cents: number;
+          billing_cycle: string;
           max_users: number | null;
           max_jobs: number | null;
           ai_briefing_enabled: boolean;
@@ -68,8 +83,11 @@ export type Database = {
         Insert: {
           id?: string;
           code: string;
+          slug: string;
           name: string;
           price_monthly?: number;
+          price_cents?: number;
+          billing_cycle?: string;
           max_users?: number | null;
           max_jobs?: number | null;
           ai_briefing_enabled?: boolean;
@@ -81,8 +99,11 @@ export type Database = {
         Update: {
           id?: string;
           code?: string;
+          slug?: string;
           name?: string;
           price_monthly?: number;
+          price_cents?: number;
+          billing_cycle?: string;
           max_users?: number | null;
           max_jobs?: number | null;
           ai_briefing_enabled?: boolean;
@@ -159,6 +180,101 @@ export type Database = {
             foreignKeyName: "agency_subscriptions_plan_id_fkey";
             columns: ["plan_id"];
             referencedRelation: "plans";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      checkout_sessions: {
+        Row: {
+          id: string;
+          agency_id: string;
+          plan_id: string;
+          provider: string;
+          provider_checkout_id: string | null;
+          provider_customer_id: string | null;
+          provider_subscription_id: string | null;
+          checkout_url: string;
+          status: string;
+          metadata: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          agency_id: string;
+          plan_id: string;
+          provider: string;
+          provider_checkout_id?: string | null;
+          provider_customer_id?: string | null;
+          provider_subscription_id?: string | null;
+          checkout_url: string;
+          status?: string;
+          metadata?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          agency_id?: string;
+          plan_id?: string;
+          provider?: string;
+          provider_checkout_id?: string | null;
+          provider_customer_id?: string | null;
+          provider_subscription_id?: string | null;
+          checkout_url?: string;
+          status?: string;
+          metadata?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "checkout_sessions_agency_id_fkey";
+            columns: ["agency_id"];
+            referencedRelation: "agencies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "checkout_sessions_plan_id_fkey";
+            columns: ["plan_id"];
+            referencedRelation: "plans";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      onboarding_tokens: {
+        Row: {
+          id: string;
+          agency_id: string;
+          email: string;
+          token: string;
+          expires_at: string;
+          used_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          agency_id: string;
+          email: string;
+          token: string;
+          expires_at: string;
+          used_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          agency_id?: string;
+          email?: string;
+          token?: string;
+          expires_at?: string;
+          used_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_tokens_agency_id_fkey";
+            columns: ["agency_id"];
+            referencedRelation: "agencies";
             referencedColumns: ["id"];
           }
         ];
@@ -1219,13 +1335,13 @@ export type Database = {
     };
     Enums: {
       agency_plan: "starter" | "growth" | "pro" | "agency";
-      agency_status: "active" | "inactive" | "suspended" | "trial";
+      agency_status: "active" | "inactive" | "suspended" | "trial" | "pending_payment";
       agency_invitation_type: "agency_admin_activation" | "team_invitation";
       agency_invitation_status: "pending" | "used" | "expired" | "cancelled";
       job_status: "briefing" | "criacao" | "revisao" | "aprovado" | "finalizado";
       platform_role: "super_admin" | "normal_user";
       job_participation_end_reason: "completed" | "removed" | "finished_job";
-      subscription_status: "trial" | "active" | "past_due" | "canceled" | "suspended";
+      subscription_status: "trial" | "active" | "past_due" | "canceled" | "suspended" | "pending_payment";
       subscription_billing_cycle: "monthly";
       task_priority: "baixa" | "media" | "alta";
       task_status: "a_fazer" | "em_andamento" | "revisao" | "concluido";
@@ -1240,6 +1356,8 @@ export type Database = {
 export type Agency = Database["public"]["Tables"]["agencies"]["Row"];
 export type Plan = Database["public"]["Tables"]["plans"]["Row"];
 export type AgencySubscription = Database["public"]["Tables"]["agency_subscriptions"]["Row"];
+export type CheckoutSession = Database["public"]["Tables"]["checkout_sessions"]["Row"];
+export type OnboardingToken = Database["public"]["Tables"]["onboarding_tokens"]["Row"];
 export type AgencyIntegration = Database["public"]["Tables"]["agency_integrations"]["Row"];
 export type AgencyChannel = Database["public"]["Tables"]["agency_channels"]["Row"];
 export type ConversationThread = Database["public"]["Tables"]["conversation_threads"]["Row"];

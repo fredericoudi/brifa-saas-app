@@ -7,7 +7,14 @@ export type CommercialPlanCode = (typeof COMMERCIAL_PLAN_CODES)[number];
 export const MANAGEABLE_COMMERCIAL_PLAN_CODES = ["starter", "pro", "agency"] as const;
 export type ManageableCommercialPlanCode = (typeof MANAGEABLE_COMMERCIAL_PLAN_CODES)[number];
 
-export const COMMERCIAL_SUBSCRIPTION_STATUSES = ["trial", "active", "past_due", "canceled", "suspended"] as const;
+export const COMMERCIAL_SUBSCRIPTION_STATUSES = [
+  "trial",
+  "active",
+  "past_due",
+  "canceled",
+  "suspended",
+  "pending_payment"
+] as const;
 export type CommercialSubscriptionStatus = (typeof COMMERCIAL_SUBSCRIPTION_STATUSES)[number];
 
 export type EffectiveSubscriptionStatus = CommercialSubscriptionStatus | "trial_expired";
@@ -19,6 +26,7 @@ export const COMMERCIAL_STATUS_LABEL: Record<EffectiveSubscriptionStatus, string
   past_due: "Pagamento pendente",
   canceled: "Cancelada",
   suspended: "Suspensa",
+  pending_payment: "Pagamento pendente",
   trial_expired: "Trial expirado"
 };
 
@@ -31,6 +39,7 @@ export const COMMERCIAL_STATUS_VARIANT: Record<
   past_due: "warning",
   canceled: "neutral",
   suspended: "danger",
+  pending_payment: "warning",
   trial_expired: "warning"
 };
 
@@ -134,6 +143,10 @@ function getSubscriptionStatusMessage(status: EffectiveSubscriptionStatus) {
     return "Sua assinatura está com pagamento pendente. O acesso segue em modo de visualização até a regularização.";
   }
 
+  if (status === "pending_payment") {
+    return "Seu cadastro foi iniciado e o pagamento ainda não foi confirmado. Assim que a cobrança for aprovada, o painel da agência será liberado.";
+  }
+
   if (status === "canceled") {
     return "Sua assinatura foi cancelada. O sistema permanece em modo de visualização até a reativação do plano.";
   }
@@ -192,6 +205,7 @@ export function evaluateCommercialAction(context: Pick<AgencyCommercialContext, 
 function mapAgencyStatusToSubscriptionStatus(status: Agency["status"]): CommercialSubscriptionStatus {
   if (status === "suspended") return "suspended";
   if (status === "trial") return "trial";
+  if (status === "pending_payment") return "pending_payment";
   return "active";
 }
 
@@ -289,7 +303,7 @@ async function buildLegacyCommercialContext({
 
   return {
     ...baseContext,
-    readOnlyMode: ["past_due", "canceled", "suspended", "trial_expired"].includes(effectiveStatus),
+    readOnlyMode: ["past_due", "canceled", "suspended", "pending_payment", "trial_expired"].includes(effectiveStatus),
     permissions: {
       create_job: evaluateCommercialAction(baseContext, "create_job"),
       create_task: evaluateCommercialAction(baseContext, "create_task"),
@@ -349,7 +363,7 @@ export async function getAgencyCommercialContext({
 
   return {
     ...baseContext,
-    readOnlyMode: ["past_due", "canceled", "suspended", "trial_expired"].includes(effectiveStatus),
+    readOnlyMode: ["past_due", "canceled", "suspended", "pending_payment", "trial_expired"].includes(effectiveStatus),
     permissions
   };
 }

@@ -26,11 +26,18 @@ export default async function AgencyScopedProtectedLayout({
     redirect(resolveAgencyAppPath(ownAgency?.slug ?? null) ?? "/dashboard");
   }
 
-  const agencyBlocked = agency.status === "inactive" || agency.status === "suspended";
+  const agencyBlocked =
+    agency.status === "inactive" || agency.status === "suspended" || agency.status === "pending_payment";
   const portalPath = resolveAgencyPortalPath(agency.slug) ?? `/app/${slug}`;
 
   if (agencyBlocked && profile.platform_role !== "super_admin") {
-    redirect(`${portalPath}?error=${agency.status === "suspended" ? "agency_suspended" : "agency_inactive"}`);
+    const error =
+      agency.status === "suspended"
+        ? "agency_suspended"
+        : agency.status === "pending_payment"
+          ? "agency_payment_pending"
+          : "agency_inactive";
+    redirect(`${portalPath}?error=${error}`);
   }
 
   return (

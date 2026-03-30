@@ -4,16 +4,19 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { resolveAgencyAppPath, resolveAgencyPortalPath } from "@/lib/agency-routing";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 export function AgencyActivationForm({
   agencySlug,
   token,
-  email
+  email,
+  tokenMode = "invitation"
 }: {
   agencySlug: string;
   token: string;
   email: string;
+  tokenMode?: "invitation" | "onboarding";
 }) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -36,7 +39,7 @@ export function AgencyActivationForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           agency: agencySlug,
-          token,
+          ...(tokenMode === "onboarding" ? { onboardingToken: token } : { token }),
           name,
           password,
           confirmPassword
@@ -55,13 +58,15 @@ export function AgencyActivationForm({
         password
       });
 
+      const dashboardPath = resolveAgencyAppPath(agencySlug, "/dashboard") ?? resolveAgencyPortalPath(agencySlug) ?? "/";
+
       if (signInError) {
         setSuccess("Agência ativada com sucesso. Faça login para continuar.");
-        router.push(`/${agencySlug}`);
+        router.push(resolveAgencyPortalPath(agencySlug) ?? `/${agencySlug}`);
         return;
       }
 
-      router.replace("/");
+      router.replace(dashboardPath);
       router.refresh();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Não foi possível concluir a ativação.");

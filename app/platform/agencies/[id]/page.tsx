@@ -18,10 +18,11 @@ import { getRequestOrigin } from "@/lib/master-server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/utils";
 
-function getStatusVariant(status: "active" | "inactive" | "suspended" | "trial") {
+function getStatusVariant(status: "active" | "inactive" | "suspended" | "trial" | "pending_payment") {
   if (status === "active") return "success" as const;
   if (status === "trial") return "brand" as const;
   if (status === "suspended") return "danger" as const;
+  if (status === "pending_payment") return "warning" as const;
   return "neutral" as const;
 }
 

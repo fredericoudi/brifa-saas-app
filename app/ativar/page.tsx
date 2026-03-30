@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AgencyActivationForm } from "@/components/master/agency-activation-form";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { findAgencyActivation } from "@/lib/agency-activation";
+import { findAgencyActivation, findAgencyOnboardingActivation } from "@/lib/agency-activation";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 function InvalidActivationState({
@@ -31,12 +31,14 @@ function InvalidActivationState({
 export default async function AgencyActivationPage({
   searchParams
 }: {
-  searchParams: { agency?: string; token?: string };
+  searchParams: { agency?: string; token?: string; onboarding?: string };
 }) {
   const agencySlug = searchParams.agency?.trim() ?? "";
   const token = searchParams.token?.trim() ?? "";
+  const onboardingToken = searchParams.onboarding?.trim() ?? "";
+  const isOnboardingFlow = Boolean(onboardingToken);
 
-  if (!agencySlug || !token) {
+  if (!agencySlug || (!token && !onboardingToken)) {
     return (
       <main className="flex min-h-screen items-center justify-center p-4 md:p-8">
         <div className="w-full max-w-md">
@@ -50,9 +52,11 @@ export default async function AgencyActivationPage({
   }
 
   const admin = createAdminSupabaseClient();
-  const activation = await findAgencyActivation(admin, agencySlug, token);
+  const activation = isOnboardingFlow
+    ? await findAgencyOnboardingActivation(admin, agencySlug, onboardingToken)
+    : await findAgencyActivation(admin, agencySlug, token);
 
-  if (!activation.agency || !activation.invitation) {
+  if (!activation.agency || (isOnboardingFlow ? !activation.onboardingToken : !activation.invitation)) {
     return (
       <main className="flex min-h-screen items-center justify-center p-4 md:p-8">
         <div className="w-full max-w-md">
@@ -65,13 +69,26 @@ export default async function AgencyActivationPage({
     );
   }
 
-  if (activation.invitation.status !== "pending") {
+  if (!isOnboardingFlow && activation.invitation?.status !== "pending") {
     return (
       <main className="flex min-h-screen items-center justify-center p-4 md:p-8">
         <div className="w-full max-w-md">
           <InvalidActivationState
             title="Link já utilizado"
             description="Esse link de ativação já foi usado ou cancelado. Solicite um novo ao super admin."
+          />
+        </div>
+      </main>
+    );
+  }
+
+  if (isOnboardingFlow && activation.onboardingToken?.used_at) {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-4 md:p-8">
+        <div className="w-full max-w-md">
+          <InvalidActivationState
+            title="Link já utilizado"
+            description="Esse link de onboarding já foi usado. Entre no portal da agência para continuar."
           />
         </div>
       </main>
@@ -96,7 +113,7 @@ export default async function AgencyActivationPage({
       <div className="w-full max-w-md">
         <Card>
           <CardHeader>
-            <h1 className="text-xl font-semibold">Ativar agência</h1>
+            <h1 className="text-xl font-semibold">{isOnboardingFlow ? "Concluir primeiro acesso" : "Ativar agência"}</h1>
             <p className="mt-1 text-sm text-muted">
               Conclua o acesso inicial de <strong>{activation.agency.name}</strong> e crie o administrador principal.
             </p>
@@ -104,8 +121,9 @@ export default async function AgencyActivationPage({
           <CardContent>
             <AgencyActivationForm
               agencySlug={activation.agency.slug}
-              token={token}
-              email={activation.invitation.email}
+              token={isOnboardingFlow ? onboardingToken : token}
+              email={isOnboardingFlow ? activation.onboardingToken!.email : activation.invitation!.email}
+              tokenMode={isOnboardingFlow ? "onboarding" : "invitation"}
             />
           </CardContent>
         </Card>

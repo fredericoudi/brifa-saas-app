@@ -4,7 +4,7 @@ import { requireSuperAdminApi } from "@/lib/master-server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 const statusSchema = z.object({
-  status: z.enum(["active", "inactive", "suspended", "trial"])
+  status: z.enum(["active", "inactive", "suspended", "trial", "pending_payment"])
 });
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {

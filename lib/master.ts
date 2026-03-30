@@ -5,7 +5,8 @@ export const AGENCY_STATUS_LABEL: Record<Database["public"]["Enums"]["agency_sta
   active: "Ativa",
   inactive: "Inativa",
   suspended: "Suspensa",
-  trial: "Trial"
+  trial: "Trial",
+  pending_payment: "Pagamento pendente"
 };
 
 export const AGENCY_PLAN_LABEL: Record<Database["public"]["Enums"]["agency_plan"], string> = {
