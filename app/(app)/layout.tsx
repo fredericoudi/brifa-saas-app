@@ -30,6 +30,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       profile={profile}
       agency={{
         name: agency.name,
+        appBasePath: resolveAgencyPortalPath(agency.slug) ?? "",
         signOutPath,
         logoUrl: agency.logo_url ?? null,
         brandColor: agency.brand_color ?? null,

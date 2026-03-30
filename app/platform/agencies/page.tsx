@@ -4,7 +4,7 @@ import { CopyLinkButton } from "@/components/master/copy-link-button";
 import { MasterAgencyForm } from "@/components/master/master-agency-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { resolveAgencyPortalPath } from "@/lib/agency-routing";
+import { resolveAgencyPortalPath, resolvePlatformPath } from "@/lib/agency-routing";
 import { COMMERCIAL_STATUS_LABEL, COMMERCIAL_STATUS_VARIANT, resolveEffectiveSubscriptionStatus } from "@/lib/commercial";
 import { getPlatformActivationLink, getPlatformOverviewData } from "@/lib/platform-admin";
 import { formatDate } from "@/lib/utils";
@@ -59,7 +59,7 @@ export default async function PlatformAgenciesPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border border-border bg-panelAlt/50 p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Caminho oficial</p>
-                <p className="mt-2 text-sm font-medium text-text">/platform</p>
+                <p className="mt-2 text-sm font-medium text-text">{resolvePlatformPath()}</p>
                 <p className="mt-1 text-sm text-muted">Use este endereço como entrada padrão do painel master.</p>
               </div>
               <div className="rounded-2xl border border-border bg-panelAlt/50 p-4">
@@ -111,7 +111,7 @@ export default async function PlatformAgenciesPage() {
                     return (
                       <tr key={agency.id} className="border-b border-border/70 align-top">
                         <td className="py-3">
-                          <Link href={`/platform/agencies/${agency.id}`} className="font-medium text-text hover:text-brand">
+                          <Link href={resolvePlatformPath(`/agencies/${agency.id}`)} className="font-medium text-text hover:text-brand">
                             {agency.name}
                           </Link>
                         </td>
@@ -145,20 +145,20 @@ export default async function PlatformAgenciesPage() {
                               </Link>
                             ) : (
                               <Link
-                                href={`/platform/agencies/${agency.id}#editar`}
+                                href={`${resolvePlatformPath(`/agencies/${agency.id}`)}#editar`}
                                 className="inline-flex h-8 items-center justify-center rounded-xl bg-amber-100 px-3 text-xs font-medium text-amber-800 transition hover:bg-amber-200"
                               >
                                 Configurar slug
                               </Link>
                             )}
                             <Link
-                              href={`/platform/agencies/${agency.id}`}
+                              href={resolvePlatformPath(`/agencies/${agency.id}`)}
                               className="inline-flex h-8 items-center justify-center rounded-xl bg-panelAlt px-3 text-xs font-medium text-text transition hover:bg-panel"
                             >
                               Ver detalhes
                             </Link>
                             <Link
-                              href={`/platform/agencies/${agency.id}#editar`}
+                              href={`${resolvePlatformPath(`/agencies/${agency.id}`)}#editar`}
                               className="inline-flex h-8 items-center justify-center rounded-xl bg-panelAlt px-3 text-xs font-medium text-text transition hover:bg-panel"
                             >
                               Editar

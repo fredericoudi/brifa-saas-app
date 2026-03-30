@@ -16,11 +16,12 @@ function upsertFaviconLink(rel: string, href: string) {
 
 export function BrifaFavicon() {
   useEffect(() => {
-    const href = "/favicon-brifa.svg?v=2";
+    const iconHref = "/icon.svg?v=3";
+    const appleHref = "/apple-icon.svg?v=3";
 
-    upsertFaviconLink("icon", href);
-    upsertFaviconLink("shortcut icon", href);
-    upsertFaviconLink("apple-touch-icon", href);
+    upsertFaviconLink("icon", iconHref);
+    upsertFaviconLink("shortcut icon", iconHref);
+    upsertFaviconLink("apple-touch-icon", appleHref);
   }, []);
 
   return null;

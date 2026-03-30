@@ -6,12 +6,22 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { resolvePlatformPath } from "@/lib/agency-routing";
 import type { UserProfile } from "@/lib/database.types";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 function mapLoginErrorMessage(message: string) {
   const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("invalid login credentials") ||
+    normalized.includes("invalid email or password") ||
+    normalized.includes("email not confirmed") ||
+    normalized.includes("invalid_credentials")
+  ) {
+    return "E-mail ou senha inválidos.";
+  }
 
   if (
     normalized.includes("failed to fetch") ||
@@ -40,7 +50,10 @@ export function LoginFormCard({
   variant = "card",
   formClassName,
   requireSuperAdmin = false,
-  superAdminOnlyMessage = "Este acesso é exclusivo do super admin. Entre pelo portal da sua agência em /slug-da-agencia."
+  superAdminOnlyMessage = "Este acesso é exclusivo do super admin. Entre pelo portal da sua agência em /slug-da-agencia.",
+  requiredAgencyId,
+  requiredAgencyName,
+  invalidAgencyMessage
 }: {
   title: string;
   description: string;
@@ -54,6 +67,9 @@ export function LoginFormCard({
   formClassName?: string;
   requireSuperAdmin?: boolean;
   superAdminOnlyMessage?: string;
+  requiredAgencyId?: string;
+  requiredAgencyName?: string;
+  invalidAgencyMessage?: string;
 }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -81,8 +97,12 @@ export function LoginFormCard({
       } = await supabase.auth.getUser();
 
       if (user) {
-        const { data } = await supabase.from("users").select("platform_role").eq("id", user.id).maybeSingle();
-        const profile = data as Pick<UserProfile, "platform_role"> | null;
+        const { data } = await supabase
+          .from("users")
+          .select("platform_role, agency_id")
+          .eq("id", user.id)
+          .maybeSingle();
+        const profile = data as Pick<UserProfile, "platform_role" | "agency_id"> | null;
 
         if (requireSuperAdmin && profile?.platform_role !== "super_admin") {
           await supabase.auth.signOut();
@@ -90,8 +110,17 @@ export function LoginFormCard({
           return;
         }
 
-        if (profile?.platform_role === "super_admin" && (next === "/" || next === "/dashboard")) {
-          destination = "/platform";
+        if (requiredAgencyId && profile?.agency_id !== requiredAgencyId) {
+          await supabase.auth.signOut();
+          setError(
+            invalidAgencyMessage ??
+              `Este usuário não está cadastrado na ${requiredAgencyName ?? "agência selecionada"}. Use um acesso vinculado a essa agência.`
+          );
+          return;
+        }
+
+        if (profile?.platform_role === "super_admin" && (next === "/" || next === "/dashboard" || next === "/platform")) {
+          destination = resolvePlatformPath();
         }
       }
 

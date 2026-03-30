@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ConversationChat } from "@/components/conversations/sandbox/conversation-chat";
 import { ConversationDebugPanel } from "@/components/conversations/sandbox/conversation-debug-panel";
 import { ConversationSidebar } from "@/components/conversations/sandbox/conversation-sidebar";
@@ -17,6 +18,7 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { resolveAgencyPathFromCurrent } from "@/lib/agency-routing";
 
 type SandboxRouteResponse = {
   selectedUser: SandboxSelectableUser;
@@ -39,6 +41,7 @@ export function ConversationSandbox({
   users: SandboxSelectableUser[];
   canAccessAsSuperAdmin: boolean;
 }) {
+  const pathname = usePathname();
   const [selectedUserId, setSelectedUserId] = useState(() => users[0]?.id ?? "");
   const [snapshot, setSnapshot] = useState<SandboxSnapshot>(EMPTY_SNAPSHOT);
   const [draft, setDraft] = useState("");
@@ -190,7 +193,7 @@ export function ConversationSandbox({
 
             <div className="flex flex-wrap items-center gap-3">
               {canAccessAsSuperAdmin ? <Badge variant="brand">Super admin com acesso liberado</Badge> : null}
-              <Link href="/conversations">
+              <Link href={resolveAgencyPathFromCurrent(pathname, "/conversations")}>
                 <Button variant="secondary">
                   <ArrowLeft className="h-4 w-4" />
                   Voltar para Conversas

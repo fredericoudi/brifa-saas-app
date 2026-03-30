@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { LoginFormCard } from "@/components/auth/login-form-card";
 import { BrifaFavicon } from "@/components/layout/brifa-favicon";
+import { resolvePlatformPath } from "@/lib/agency-routing";
 import type { UserProfile } from "@/lib/database.types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -29,7 +30,7 @@ export default async function HomePage({
   if (user) {
     const { data } = await supabase.from("users").select("platform_role").eq("id", user.id).maybeSingle();
     const profile = data as Pick<UserProfile, "platform_role"> | null;
-    redirect(profile?.platform_role === "super_admin" ? "/platform" : "/dashboard");
+    redirect(profile?.platform_role === "super_admin" ? resolvePlatformPath() : "/dashboard");
   }
 
   const helperError = resolveRouteErrorMessage(searchParams.error ?? null);
@@ -60,7 +61,7 @@ export default async function HomePage({
               <LoginFormCard
                 title="Entrar como super admin"
                 description="Acesse a central da plataforma para configurar planos, cadastrar agências e acompanhar o SaaS."
-                next="/platform"
+                next={resolvePlatformPath()}
                 helperError={helperError}
                 showSignupLink={false}
                 requireSuperAdmin={true}

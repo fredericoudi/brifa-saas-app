@@ -1,10 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { resolveAgencyPathFromCurrent } from "@/lib/agency-routing";
 
 export function JobExitBar({ jobId, jobTitle }: { jobId: string; jobTitle: string }) {
+  const pathname = usePathname();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -33,7 +35,7 @@ export function JobExitBar({ jobId, jobTitle }: { jobId: string; jobTitle: strin
         return;
       }
 
-      router.replace("/tasks");
+      router.replace(resolveAgencyPathFromCurrent(pathname, "/tasks"));
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível registrar a sua saída deste job.");

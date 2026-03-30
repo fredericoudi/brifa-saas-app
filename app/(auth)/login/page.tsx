@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { resolvePlatformLoginPath } from "@/lib/agency-routing";
 
 export default function LoginPage({
   searchParams
@@ -16,5 +17,6 @@ export default function LoginPage({
   }
 
   const query = params.toString();
-  redirect(query ? `/?${query}` : "/");
+  const destination = resolvePlatformLoginPath();
+  redirect(query ? `${destination}?${query}` : destination);
 }

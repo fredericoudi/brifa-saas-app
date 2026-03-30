@@ -3,31 +3,32 @@ import { ArrowRight, Building2, CreditCard, Grid2x2, Users } from "lucide-react"
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
+import { resolvePlatformPath } from "@/lib/agency-routing";
 import { COMMERCIAL_STATUS_LABEL, COMMERCIAL_STATUS_VARIANT, resolveEffectiveSubscriptionStatus } from "@/lib/commercial";
 import { getPlatformOverviewData } from "@/lib/platform-admin";
 import { formatDate } from "@/lib/utils";
 
 const quickLinks = [
   {
-    href: "/platform/agencies",
+    href: resolvePlatformPath("/agencies"),
     title: "Agências",
     description: "Abra o painel unificado com listagem, cadastro, slug, ativação e edição das contas.",
     icon: Building2
   },
   {
-    href: "/platform/plans",
+    href: resolvePlatformPath("/plans"),
     title: "Configurar planos",
     description: "Revise limites comerciais, preço mensal e recursos habilitados.",
     icon: Grid2x2
   },
   {
-    href: "/platform/subscriptions",
+    href: resolvePlatformPath("/subscriptions"),
     title: "Assinaturas",
     description: "Acompanhe trial, renovação e status financeiro.",
     icon: CreditCard
   },
   {
-    href: "/platform/users",
+    href: resolvePlatformPath("/users"),
     title: "Usuários",
     description: "Veja a ocupação da base e o tipo de acesso de cada perfil.",
     icon: Users
@@ -101,7 +102,7 @@ export default async function PlatformDashboardPage() {
                 <h2 className="text-base font-semibold">Últimas agências cadastradas</h2>
                 <p className="mt-1 text-sm text-muted">Acompanhe rapidamente as contas mais recentes.</p>
               </div>
-              <Link href="/platform/agencies" className="text-sm font-medium text-brand hover:opacity-80">
+              <Link href={resolvePlatformPath("/agencies")} className="text-sm font-medium text-brand hover:opacity-80">
                 Ver todas
               </Link>
             </div>
@@ -118,7 +119,7 @@ export default async function PlatformDashboardPage() {
                   return (
                     <Link
                       key={agency.id}
-                      href={`/platform/agencies/${agency.id}`}
+                      href={resolvePlatformPath(`/agencies/${agency.id}`)}
                       className="flex items-center justify-between gap-4 rounded-2xl border border-border p-4 transition hover:bg-panelAlt/60"
                     >
                       <div className="min-w-0">
@@ -174,21 +175,21 @@ export default async function PlatformDashboardPage() {
           <CardContent>
             <div className="grid gap-3">
               <Link
-                href="/platform/agencies#cadastro"
+                href={`${resolvePlatformPath("/agencies")}#cadastro`}
                 className="rounded-2xl border border-border bg-panelAlt/50 p-4 transition hover:bg-panel"
               >
                 <p className="text-sm font-semibold text-text">Cadastrar nova agência</p>
                 <p className="mt-1 text-sm text-muted">Inclui slug, plano, status, trial e administrador inicial.</p>
               </Link>
               <Link
-                href="/platform/plans"
+                href={resolvePlatformPath("/plans")}
                 className="rounded-2xl border border-border bg-panelAlt/50 p-4 transition hover:bg-panel"
               >
                 <p className="text-sm font-semibold text-text">Configurar planos</p>
                 <p className="mt-1 text-sm text-muted">Revise Starter, Pro, Agency e os limites comerciais.</p>
               </Link>
               <Link
-                href="/platform/agencies"
+                href={resolvePlatformPath("/agencies")}
                 className="rounded-2xl border border-border bg-panelAlt/50 p-4 transition hover:bg-panel"
               >
                 <p className="text-sm font-semibold text-text">Agências</p>

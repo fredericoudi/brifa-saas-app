@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { Archive, BarChart3, Briefcase, Building2, Kanban, LayoutDashboard, ListTodo, MessageSquareText, Settings, ShieldCheck, type LucideIcon, Users } from "lucide-react";
 import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import { resolvePlatformPath } from "@/lib/agency-routing";
 import type { UserProfile } from "@/lib/database.types";
 import { AGENCY_BRAND_EVENT, type AgencyBrandEventDetail, getAgencyBrandStyleVars } from "@/lib/agency-branding";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
@@ -18,20 +19,22 @@ type NavItem = {
   adminOnly?: boolean;
 };
 
-const baseNavItems: readonly NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/jobs", label: "Jobs", icon: Briefcase },
-  { href: "/tasks", label: "Tarefas", icon: ListTodo },
-  { href: "/jobs/kanban", label: "Kanban", icon: Kanban },
-  { href: "/archived", label: "Arquivados", icon: Archive },
-  { href: "/conversations", label: "Conversas", icon: MessageSquareText, adminOnly: true },
-  { href: "/clients", label: "Clientes", icon: Building2 },
-  { href: "/team", label: "Equipe", icon: Users },
-  { href: "/workload", label: "Produção da Equipe", icon: BarChart3 },
-  { href: "/settings", label: "Configurações", icon: Settings }
+type BaseNavItem = Omit<NavItem, "href"> & { path: string };
+
+const baseNavItems: readonly BaseNavItem[] = [
+  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { path: "/jobs", label: "Jobs", icon: Briefcase },
+  { path: "/tasks", label: "Tarefas", icon: ListTodo },
+  { path: "/jobs/kanban", label: "Kanban", icon: Kanban },
+  { path: "/archived", label: "Arquivados", icon: Archive },
+  { path: "/conversations", label: "Conversas", icon: MessageSquareText, adminOnly: true },
+  { path: "/clients", label: "Clientes", icon: Building2 },
+  { path: "/team", label: "Equipe", icon: Users },
+  { path: "/workload", label: "Produção da Equipe", icon: BarChart3 },
+  { path: "/settings", label: "Configurações", icon: Settings }
 ] as const;
 
-const masterNavItem: NavItem = { href: "/platform", label: "Painel Master", icon: ShieldCheck };
+const masterNavItem: NavItem = { href: resolvePlatformPath(), label: "Painel Master", icon: ShieldCheck };
 
 const titleMap: Record<string, string> = {
   dashboard: "Dashboard",
@@ -64,6 +67,7 @@ export function AppShell({
   profile: UserProfile;
   agency: {
     name: string;
+    appBasePath: string;
     signOutPath: string;
     logoUrl: string | null;
     brandColor: string | null;
@@ -79,21 +83,28 @@ export function AppShell({
   const [agencyState, setAgencyState] = useState(agency);
 
   const pageTitle = useMemo(() => {
-    const segment = pathname.split("/").filter(Boolean)[0] ?? "dashboard";
+    const normalizedPath = pathname.startsWith(agency.appBasePath)
+      ? pathname.slice(agency.appBasePath.length) || "/"
+      : pathname;
+    const segment = normalizedPath.split("/").filter(Boolean)[0] ?? "dashboard";
     return titleMap[segment] ?? "Plataforma";
-  }, [pathname]);
+  }, [agency.appBasePath, pathname]);
 
   const navItems = useMemo(() => {
     const filteredItems = baseNavItems.filter(
       (item) => !item.adminOnly || profile.role === "admin" || profile.platform_role === "super_admin"
-    );
+    ).map((item) => ({
+      href: `${agency.appBasePath}${item.path}`,
+      label: item.label,
+      icon: item.icon
+    }));
 
     if (profile.platform_role === "super_admin") {
       return [...filteredItems, masterNavItem];
     }
 
     return [...filteredItems];
-  }, [profile.platform_role, profile.role]);
+  }, [agency.appBasePath, profile.platform_role, profile.role]);
 
   const desktopExpanded = sidebarMode === "expanded" || (sidebarMode === "hover" && hoverExpanded);
   const desktopWidth = desktopExpanded ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH;
@@ -133,6 +144,7 @@ export function AppShell({
 
       setAgencyState((current) => ({
         name: detail.agencyName ?? current.name,
+        appBasePath: current.appBasePath,
         signOutPath: current.signOutPath,
         logoUrl: detail.logoUrl ?? null,
         brandColor: detail.brandColor ?? null,
@@ -173,6 +185,9 @@ export function AppShell({
         roleLabel={roleLabel}
         pageTitle={pageTitle}
         showMasterLink={profile.platform_role === "super_admin"}
+        masterHref={resolvePlatformPath()}
+        profileHref={`${agency.appBasePath}/settings#perfil`}
+        agencyHref={`${agency.appBasePath}/settings#agencia`}
         signingOut={signingOut}
         onSignOut={handleSignOut}
         onMobileMenuToggle={() => setMobileOpen((prev) => !prev)}
@@ -187,6 +202,7 @@ export function AppShell({
         agencyUpdatedAt={agencyState.updatedAt}
         mode={sidebarMode}
         onModeChange={setSidebarMode}
+        dashboardHref={`${agency.appBasePath}/dashboard`}
         desktopExpanded={desktopExpanded}
         desktopWidth={desktopWidth}
         onHoverStart={() => setHoverExpanded(true)}

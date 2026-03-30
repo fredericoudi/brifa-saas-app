@@ -6,6 +6,7 @@ import { CopyLinkButton } from "@/components/master/copy-link-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { resolvePlatformPath } from "@/lib/agency-routing";
 import { COMMERCIAL_STATUS_LABEL, type CommercialPlanCode, type CommercialSubscriptionStatus } from "@/lib/commercial";
 
 type MasterAgencyFormValues = {
@@ -93,7 +94,7 @@ export function MasterAgencyForm({
       router.refresh();
 
       if (isCreate && payload.agency?.id) {
-        router.push(`/platform/agencies/${payload.agency.id}`);
+        router.push(resolvePlatformPath(`/agencies/${payload.agency.id}`));
       }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Não foi possível salvar a agência.");

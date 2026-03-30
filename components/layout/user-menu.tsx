@@ -12,6 +12,9 @@ export function UserMenu({
   profileUpdatedAt,
   roleLabel,
   showMasterLink,
+  masterHref,
+  profileHref,
+  agencyHref,
   signingOut,
   onSignOut
 }: {
@@ -20,6 +23,9 @@ export function UserMenu({
   profileUpdatedAt?: string;
   roleLabel: string;
   showMasterLink: boolean;
+  masterHref: string;
+  profileHref: string;
+  agencyHref: string;
   signingOut: boolean;
   onSignOut: () => Promise<void>;
 }) {
@@ -74,7 +80,7 @@ export function UserMenu({
           <div className="pt-2.5">
             {showMasterLink ? (
               <Link
-                href="/platform"
+                href={masterHref}
                 className="block rounded-[16px] px-3 py-2.5 text-sm transition hover:bg-panelAlt"
                 onClick={() => setOpen(false)}
               >
@@ -82,14 +88,14 @@ export function UserMenu({
               </Link>
             ) : null}
             <Link
-              href="/settings#perfil"
+              href={profileHref}
               className="block rounded-[16px] px-3 py-2.5 text-sm transition hover:bg-panelAlt"
               onClick={() => setOpen(false)}
             >
               Meu perfil
             </Link>
             <Link
-              href="/settings#agencia"
+              href={agencyHref}
               className="block rounded-[16px] px-3 py-2.5 text-sm transition hover:bg-panelAlt"
               onClick={() => setOpen(false)}
             >

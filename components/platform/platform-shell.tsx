@@ -17,16 +17,17 @@ import {
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PlatformFavicon } from "@/components/platform/platform-favicon";
+import { resolvePlatformLoginPath, resolvePlatformPath } from "@/lib/agency-routing";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 const platformNavItems = [
-  { href: "/platform", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/platform/agencies", label: "Agências", icon: Building2 },
-  { href: "/platform/plans", label: "Configurar planos", icon: Grid2x2 },
-  { href: "/platform/subscriptions", label: "Assinaturas", icon: CreditCard },
-  { href: "/platform/users", label: "Usuários", icon: Users },
-  { href: "/platform/settings", label: "Configurações", icon: Settings }
+  { href: resolvePlatformPath(), label: "Dashboard", icon: LayoutDashboard },
+  { href: resolvePlatformPath("/agencies"), label: "Agências", icon: Building2 },
+  { href: resolvePlatformPath("/plans"), label: "Configurar planos", icon: Grid2x2 },
+  { href: resolvePlatformPath("/subscriptions"), label: "Assinaturas", icon: CreditCard },
+  { href: resolvePlatformPath("/users"), label: "Usuários", icon: Users },
+  { href: resolvePlatformPath("/settings"), label: "Configurações", icon: Settings }
 ] as const;
 
 const pageTitleMap: Record<string, string> = {
@@ -54,7 +55,10 @@ export function PlatformShell({
 
   const pageTitle = useMemo(() => {
     const segments = pathname.split("/").filter(Boolean);
-    const key = segments[1] ?? "platform";
+    const key =
+      segments[0] === "app" && segments[1] === "platform"
+        ? (segments[2] ?? "platform")
+        : (segments[1] ?? "platform");
     return pageTitleMap[key] ?? "Painel Master";
   }, [pathname]);
 
@@ -63,7 +67,7 @@ export function PlatformShell({
       setSigningOut(true);
       const supabase = createBrowserSupabaseClient();
       await supabase.auth.signOut();
-      router.replace("/");
+      router.replace(resolvePlatformLoginPath());
       router.refresh();
     } finally {
       setSigningOut(false);
@@ -114,7 +118,7 @@ export function PlatformShell({
             const Icon = item.icon;
             const routePath = item.href.split("#")[0];
             const isActive =
-              routePath === "/platform"
+              routePath === resolvePlatformPath()
                 ? pathname === routePath
                 : pathname === routePath || pathname.startsWith(`${routePath}/`);
 

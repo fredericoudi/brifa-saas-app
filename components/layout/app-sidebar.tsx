@@ -63,6 +63,7 @@ function SidebarNav({
 export function AppSidebar({
   navItems,
   pathname,
+  dashboardHref,
   agencyName,
   agencyLogoUrl,
   agencyUpdatedAt,
@@ -77,6 +78,7 @@ export function AppSidebar({
 }: {
   navItems: NavItem[];
   pathname: string;
+  dashboardHref: string;
   agencyName: string;
   agencyLogoUrl: string | null;
   agencyUpdatedAt?: string;
@@ -108,7 +110,7 @@ export function AppSidebar({
       >
         <div className="flex h-full flex-col">
           <Link
-            href="/dashboard"
+            href={dashboardHref}
             onClick={onMobileClose}
             className="flex items-center gap-3 border-b border-border/80 px-5 py-5"
           >

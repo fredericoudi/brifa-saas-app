@@ -5,7 +5,7 @@ import { MasterAgencyForm } from "@/components/master/master-agency-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { MetricCard } from "@/components/ui/metric-card";
-import { resolveAgencyPortalPath } from "@/lib/agency-routing";
+import { resolveAgencyPortalPath, resolvePlatformPath } from "@/lib/agency-routing";
 import {
   COMMERCIAL_STATUS_LABEL,
   COMMERCIAL_STATUS_VARIANT,
@@ -88,7 +88,7 @@ export default async function PlatformAgencyDetailsPage({ params }: { params: { 
   return (
     <div className="space-y-6">
       <div className="space-y-3">
-        <Link href="/platform/agencies" className="inline-flex items-center gap-2 text-sm font-medium text-brand hover:opacity-80">
+        <Link href={resolvePlatformPath("/agencies")} className="inline-flex items-center gap-2 text-sm font-medium text-brand hover:opacity-80">
           ← Voltar para agências
         </Link>
 

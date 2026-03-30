@@ -8,6 +8,7 @@ import logoBrifa from "@/images/logo_brifa.svg";
 import { LoginFormCard } from "@/components/auth/login-form-card";
 import { BrifaFavicon } from "@/components/layout/brifa-favicon";
 import { AgencyMark } from "@/components/layout/agency-mark";
+import { resolveAgencyAppPath, resolvePlatformLoginPath } from "@/lib/agency-routing";
 import type { Agency, UserProfile } from "@/lib/database.types";
 import { getAgencyBrandStyleVars } from "@/lib/agency-branding";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
@@ -35,13 +36,20 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
     const profile = data as Pick<UserProfile, "agency_id" | "platform_role"> | null;
 
     const isSuperAdminPreview = profile?.platform_role === "super_admin";
+    const agencyDashboardPath = resolveAgencyAppPath(agency.slug, "/dashboard") ?? "/dashboard";
 
     if (!isSuperAdminPreview && profile?.agency_id === agency.id) {
-      redirect("/dashboard");
+      redirect(agencyDashboardPath);
     }
 
     if (!isSuperAdminPreview) {
-      redirect("/dashboard");
+      const { data: ownAgency } = await supabase
+        .from("agencies")
+        .select("slug")
+        .eq("id", profile?.agency_id ?? "")
+        .maybeSingle();
+
+      redirect(resolveAgencyAppPath(ownAgency?.slug ?? null) ?? "/dashboard");
     }
   }
 
@@ -117,7 +125,10 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
                     <LoginFormCard
                       title={`Entrar em ${agency.name}`}
                       description="Use o seu e-mail e senha para acessar o painel desta agência."
-                      next="/dashboard"
+                      next={resolveAgencyAppPath(agency.slug, "/dashboard") ?? "/dashboard"}
+                      requiredAgencyId={agency.id}
+                      requiredAgencyName={agency.name}
+                      invalidAgencyMessage={`Este usuário não está cadastrado na ${agency.name}. Use um acesso vinculado a essa agência.`}
                       showSignupLink={false}
                       style={brandStyle as CSSProperties}
                       variant="bare"
@@ -129,7 +140,7 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
             </div>
 
             <div className="w-full pt-8">
-              <Link href="/" className="inline-flex items-center gap-2 text-xs text-muted transition hover:text-brand">
+              <Link href={resolvePlatformLoginPath()} className="inline-flex items-center gap-2 text-xs text-muted transition hover:text-brand">
                 Login geral da plataforma
                 {agencyBlocked ? <ArrowRight className="h-3.5 w-3.5" /> : null}
               </Link>
