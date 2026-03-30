@@ -158,10 +158,10 @@ export function PublicSignupForm({
                       <Input
                         value={slug}
                         onChange={(event) => setSlug(event.target.value)}
-                        placeholder="az3"
+                        placeholder="suaagencia"
                         required
                       />
-                      <p className="mt-2 text-xs text-muted">Endereço do painel: brifa.app/app/{slugPreview || "sua-agencia"}</p>
+                      <p className="mt-2 text-xs text-muted">Endereço do painel: brifa.app/app/{slugPreview || "suaagencia"}</p>
                     </div>
 
                     <div className="md:col-span-2">
