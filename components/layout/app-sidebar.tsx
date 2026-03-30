@@ -134,7 +134,7 @@ export function AppSidebar({
       </aside>
 
       <aside
-        className="fixed bottom-4 left-4 top-4 z-30 hidden overflow-hidden rounded-[32px] border border-border/80 bg-panel/92 shadow-panel backdrop-blur-xl transition-[width] duration-200 lg:flex lg:flex-col"
+        className="fixed bottom-4 left-4 top-4 z-30 hidden overflow-visible rounded-[32px] border border-border/80 bg-panel/92 shadow-panel backdrop-blur-xl transition-[width] duration-200 lg:flex lg:flex-col"
         style={{ width: desktopWidth }}
         onMouseEnter={mode === "hover" ? onHoverStart : undefined}
         onMouseLeave={mode === "hover" ? onHoverEnd : undefined}
