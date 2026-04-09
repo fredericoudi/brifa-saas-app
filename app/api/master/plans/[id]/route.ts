@@ -20,11 +20,15 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       return NextResponse.json({ error: "Informe um valor mensal válido para o plano." }, { status: 400 });
     }
 
+    const normalizedPriceMonthly = Number(parsed.data.priceMonthly.toFixed(2));
+    const normalizedPriceCents = Math.round(normalizedPriceMonthly * 100);
+
     const admin = createAdminSupabaseClient();
     const { data: updatedPlan, error } = await admin
       .from("plans")
       .update({
-        price_monthly: parsed.data.priceMonthly
+        price_monthly: normalizedPriceMonthly,
+        price_cents: normalizedPriceCents
       })
       .eq("id", params.id)
       .select("*")

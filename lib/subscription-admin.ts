@@ -56,7 +56,7 @@ export async function upsertAgencySubscription({
     resolveIsoDate(trialEndsAt) ??
     existing?.trial_ends_at ??
     (status === "trial" && normalizedTrialStart
-      ? addDays(new Date(normalizedTrialStart), 14).toISOString()
+      ? addDays(new Date(normalizedTrialStart), 7).toISOString()
       : null);
   const currentPeriodStart = existing?.current_period_start ?? now.toISOString();
   const defaultBillingDate =
@@ -105,6 +105,7 @@ export async function upsertAgencySubscription({
     .from("agencies")
     .update({
       plan: planCode === "growth" ? "growth" : (planCode as Database["public"]["Enums"]["agency_plan"]),
+      trial_activated: status === "trial" ? true : undefined,
       trial_starts_at: subscription.trial_started_at,
       trial_ends_at: subscription.trial_ends_at
     })

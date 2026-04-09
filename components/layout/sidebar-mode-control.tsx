@@ -59,7 +59,7 @@ export function SidebarModeControl({
       <button
         type="button"
         className={cn(
-          "inline-flex h-11 items-center gap-2 rounded-[18px] border border-border bg-panelAlt/75 px-3 text-xs font-medium text-muted transition hover:bg-panelAlt hover:text-text",
+          "inline-flex h-11 items-center gap-2 rounded-[16px] px-3 text-xs font-medium text-muted transition hover:bg-panel hover:text-text",
           compact ? "w-9 justify-center px-0" : "w-full justify-start"
         )}
         onClick={() => setOpen((prev) => !prev)}
@@ -71,7 +71,7 @@ export function SidebarModeControl({
       </button>
 
       {open ? (
-        <div className="absolute bottom-14 left-0 z-50 w-72 rounded-[24px] border border-border bg-panel p-2.5 shadow-panel">
+        <div className="absolute bottom-14 left-0 z-50 w-72 rounded-[20px] border border-border bg-panel p-2.5 shadow-panel">
           <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted">Barra lateral</p>
           <div className="space-y-1">
             {modeOptions.map((option) => (

@@ -12,7 +12,7 @@ const createAgencySchema = z.object({
   name: z.string().trim().min(2).max(120),
   slug: z.string().trim().max(120).optional().nullable(),
   plan: z.enum(COMMERCIAL_PLAN_CODES).default("starter"),
-  status: z.enum(COMMERCIAL_SUBSCRIPTION_STATUSES).default("trial"),
+  status: z.enum(COMMERCIAL_SUBSCRIPTION_STATUSES).default("active"),
   adminEmail: z.string().trim().email(),
   adminName: z.string().trim().max(120).optional().nullable(),
   trialStartsAt: z.string().trim().optional().nullable(),
@@ -82,6 +82,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "A data final do trial deve ser posterior à data inicial." }, { status: 400 });
     }
 
+    const isTrialStatus = parsed.data.status === "trial";
+    const resolvedTrialStart = isTrialStatus ? trialStartsAt ?? new Date().toISOString() : null;
+
     const { data: insertedAgency, error: agencyError } = await admin
       .from("agencies")
       .insert({
@@ -89,8 +92,9 @@ export async function POST(request: Request) {
         slug: normalizedSlug,
         plan: parsed.data.plan === "growth" ? "growth" : (parsed.data.plan as Agency["plan"]),
         status: resolveAgencyOperationalStatus(parsed.data.status),
-        trial_starts_at: parsed.data.status === "trial" ? trialStartsAt ?? new Date().toISOString() : trialStartsAt,
-        trial_ends_at: parsed.data.status === "trial" ? trialEndsAt : null
+        trial_activated: isTrialStatus,
+        trial_starts_at: resolvedTrialStart,
+        trial_ends_at: isTrialStatus ? trialEndsAt : null
       })
       .select("*")
       .single();
@@ -106,8 +110,8 @@ export async function POST(request: Request) {
       agencyId: agency.id,
       planCode: parsed.data.plan,
       status: parsed.data.status,
-      trialStartsAt,
-      trialEndsAt
+      trialStartsAt: resolvedTrialStart,
+      trialEndsAt: isTrialStatus ? trialEndsAt : null
     });
 
     const token = generateActivationToken();

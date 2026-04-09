@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,12 +30,18 @@ const INITIAL_FORM: ClientForm = {
 };
 
 export default function ClientsPage() {
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [form, setForm] = useState<ClientForm>(INITIAL_FORM);
+  const [limitModalOpen, setLimitModalOpen] = useState(false);
+  const [limitModalMessage, setLimitModalMessage] = useState("");
+  const [limitModalTrialActivated, setLimitModalTrialActivated] = useState(false);
+  const [activatingTrial, setActivatingTrial] = useState(false);
 
   const isEditing = useMemo(() => Boolean(form.id), [form.id]);
 
@@ -113,6 +120,7 @@ export default function ClientsPage() {
     try {
       setSaving(true);
       setError("");
+      setSuccess("");
 
       const supabase = createBrowserSupabaseClient();
       const payload = {
@@ -129,11 +137,42 @@ export default function ClientsPage() {
         const { error: updateError } = await supabase.from("clients").update(payload).eq("id", form.id);
         if (updateError) throw updateError;
       } else {
-        const { error: insertError } = await supabase.from("clients").insert(payload);
-        if (insertError) throw insertError;
+        const response = await fetch("/api/clients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: form.name,
+            prefix: form.prefix.trim().toUpperCase() || null,
+            company: form.company || null,
+            email: form.email || null,
+            phone: form.phone || null,
+            notes: form.notes || null
+          })
+        });
+
+        const result = (await response.json().catch(() => null)) as
+          | {
+              error?: string;
+              type?: string;
+              message?: string;
+              trialActivated?: boolean;
+            }
+          | null;
+
+        if (!response.ok) {
+          if (result?.error === "LIMIT_REACHED" && result.type === "CLIENT") {
+            setLimitModalMessage(result.message ?? "Você atingiu o limite do plano Starter.");
+            setLimitModalTrialActivated(Boolean(result.trialActivated));
+            setLimitModalOpen(true);
+            return;
+          }
+
+          throw new Error(result?.error ?? result?.message ?? "Falha ao salvar cliente.");
+        }
       }
 
       resetForm();
+      setSuccess(isEditing ? "Cliente atualizado com sucesso." : "Cliente criado com sucesso.");
       await loadData();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Falha ao salvar cliente.");
@@ -153,6 +192,44 @@ export default function ClientsPage() {
       await loadData();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Falha ao excluir cliente.");
+    }
+  }
+
+  async function handleActivateTrial() {
+    try {
+      setActivatingTrial(true);
+      setError("");
+      setSuccess("");
+
+      const response = await fetch("/api/subscription/trial/activate", {
+        method: "POST"
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            error?: string;
+            message?: string;
+          }
+        | null;
+
+      if (!response.ok) {
+        if (payload?.error === "TRIAL_ALREADY_ACTIVATED") {
+          setLimitModalTrialActivated(true);
+          window.dispatchEvent(new Event("commercial-context:refresh"));
+          return;
+        }
+
+        throw new Error(payload?.error ?? payload?.message ?? "Não foi possível liberar o acesso completo.");
+      }
+
+      window.dispatchEvent(new Event("commercial-context:refresh"));
+      setLimitModalOpen(false);
+      setSuccess("Acesso completo liberado por 7 dias. Aproveite para cadastrar clientes sem limite neste período.");
+      await loadData();
+    } catch (activateError) {
+      setError(activateError instanceof Error ? activateError.message : "Não foi possível liberar o acesso completo.");
+    } finally {
+      setActivatingTrial(false);
     }
   }
 
@@ -211,6 +288,7 @@ export default function ClientsPage() {
             </div>
 
             {error ? <p className="md:col-span-2 rounded-xl bg-rose-100 px-3 py-2 text-xs text-rose-700">{error}</p> : null}
+            {success ? <p className="md:col-span-2 rounded-xl bg-emerald-100 px-3 py-2 text-xs text-emerald-700">{success}</p> : null}
 
             <div className="md:col-span-2 flex gap-2">
               <Button type="submit" disabled={saving}>
@@ -272,6 +350,62 @@ export default function ClientsPage() {
           )}
         </CardContent>
       </Card>
+
+      {limitModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <Card className="w-full max-w-xl">
+            <CardHeader>
+              <h3 className="text-lg font-semibold text-text">🚀 Sua agência está crescendo!</h3>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {limitModalTrialActivated ? (
+                <>
+                  <p className="text-sm text-text">
+                    {limitModalMessage || "Você chegou no limite de 3 clientes."}
+                  </p>
+                  <p className="text-sm text-muted">
+                    Desbloqueie clientes ilimitados para continuar crescendo.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-text">
+                    Você chegou no limite de 3 clientes no plano Starter.
+                  </p>
+                  <p className="text-sm text-muted">
+                    Libere acesso completo por 7 dias e continue crescendo sem limites.
+                  </p>
+                </>
+              )}
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  onClick={() => {
+                    if (limitModalTrialActivated) {
+                      setLimitModalOpen(false);
+                      router.push("/settings#assinatura");
+                      return;
+                    }
+
+                    void handleActivateTrial();
+                  }}
+                  disabled={activatingTrial}
+                >
+                  {limitModalTrialActivated
+                    ? "Desbloquear clientes ilimitados"
+                    : activatingTrial
+                      ? "Liberando acesso..."
+                      : "Liberar acesso completo por 7 dias"}
+                </Button>
+                {!limitModalTrialActivated ? (
+                  <Button variant="secondary" onClick={() => setLimitModalOpen(false)} disabled={activatingTrial}>
+                    Continuar no plano gratuito
+                  </Button>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Esse link de ativação expirou. Solicite um novo link." }, { status: 400 });
     }
 
-    if (isOnboardingFlow && activation.agency.status !== "active") {
+    if (isOnboardingFlow && !["active", "trial"].includes(activation.agency.status)) {
       return NextResponse.json(
         { error: "A agência ainda não está liberada. Aguarde a confirmação do pagamento." },
         { status: 400 }

@@ -22,8 +22,8 @@ const config: Config = {
         danger: "hsl(var(--danger))"
       },
       boxShadow: {
-        panel: "0 24px 60px -36px rgba(15, 23, 42, 0.24)",
-        soft: "0 12px 30px -24px rgba(15, 23, 42, 0.22)"
+        panel: "0 24px 70px -46px rgba(26, 38, 73, 0.3)",
+        soft: "0 12px 34px -26px rgba(26, 38, 73, 0.24)"
       },
       borderRadius: {
         xl: "1rem",
@@ -31,7 +31,7 @@ const config: Config = {
       },
       backgroundImage: {
         "dashboard-pattern":
-          "radial-gradient(circle at 100% 0, hsl(var(--brand-muted)) 0%, transparent 32%), radial-gradient(circle at 0 100%, hsl(var(--brand-muted)) 0%, transparent 38%), linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(248, 250, 255, 0.95))"
+          "linear-gradient(180deg, rgba(249, 251, 255, 0.96), rgba(243, 246, 252, 0.96))"
       }
     }
   },

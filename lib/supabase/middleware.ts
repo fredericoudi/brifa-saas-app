@@ -7,8 +7,8 @@ import {
   prependAgencyAppPath,
   resolvePlatformLoginPath,
   resolvePlatformPath
-} from "@/lib/agency-routing";
-import type { Database } from "@/lib/database.types";
+} from "../agency-routing";
+import type { Database } from "../database.types";
 
 type CookieMutation = {
   name: string;
@@ -18,6 +18,8 @@ type CookieMutation = {
 
 const PUBLIC_ROUTES = [
   "/",
+  "/assets",
+  "/landing",
   "/login",
   "/platform-login",
   "/app/platform-login",
@@ -27,6 +29,9 @@ const PUBLIC_ROUTES = [
   "/auth/callback",
   "/ativar",
   "/api/agency-activation",
+  "/api/address/zipcode",
+  "/api/commercial/plans",
+  "/api/commercial/resend-onboarding",
   "/api/commercial/signup",
   "/api/conversation/test",
   "/api/conversation/process",
@@ -47,6 +52,8 @@ const LEGACY_AGENCY_ROUTE_PREFIXES = [
   "/workload",
   "/settings"
 ];
+const LANDING_HOSTS = new Set(["brifa.app", "www.brifa.app"]);
+
 function matchesRoutePrefix(pathname: string, route: string) {
   return pathname === route || pathname.startsWith(`${route}/`);
 }
@@ -73,6 +80,14 @@ function isAgencyAppPanelPath(pathname: string) {
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
+
+  const hostHeader = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? request.nextUrl.hostname;
+
+  if (LANDING_HOSTS.has(hostHeader) && request.nextUrl.pathname === "/") {
+    const rewriteUrl = request.nextUrl.clone();
+    rewriteUrl.pathname = "/landing/index.html";
+    return NextResponse.rewrite(rewriteUrl);
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -174,7 +189,8 @@ export async function updateSession(request: NextRequest) {
   let agencySlug: string | null = null;
   if (profile?.agency_id) {
     const { data: agency } = await supabase.from("agencies").select("slug").eq("id", profile.agency_id).maybeSingle();
-    agencySlug = agency?.slug?.toLowerCase() ?? null;
+    const typedAgency = (agency as Pick<Database["public"]["Tables"]["agencies"]["Row"], "slug"> | null) ?? null;
+    agencySlug = typedAgency?.slug?.toLowerCase() ?? null;
   }
 
   if (profile?.platform_role !== "super_admin" && isPlatformRoute) {

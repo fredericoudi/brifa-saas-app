@@ -5,6 +5,13 @@ import type { CommercialPlanCode } from "@/lib/commercial";
 
 export const PUBLIC_SIGNUP_PLAN_SLUGS = ["start", "pro", "business"] as const;
 export type PublicSignupPlanSlug = (typeof PUBLIC_SIGNUP_PLAN_SLUGS)[number];
+export type PublicSignupPlanOption = {
+  slug: PublicSignupPlanSlug;
+  label: string;
+  priceLabel: string;
+  priceCents: number;
+  highlight: string;
+};
 
 export const PUBLIC_SIGNUP_PLAN_MAP: Record<PublicSignupPlanSlug, CommercialPlanCode> = {
   start: "starter",
@@ -12,11 +19,32 @@ export const PUBLIC_SIGNUP_PLAN_MAP: Record<PublicSignupPlanSlug, CommercialPlan
   business: "agency"
 };
 
+const COMMERCIAL_TO_PUBLIC_PLAN_MAP = Object.fromEntries(
+  Object.entries(PUBLIC_SIGNUP_PLAN_MAP).map(([publicSlug, commercialCode]) => [commercialCode, publicSlug])
+) as Record<CommercialPlanCode, PublicSignupPlanSlug | undefined>;
+
 export const PUBLIC_SIGNUP_PLAN_LABEL: Record<PublicSignupPlanSlug, string> = {
   start: "Start",
   pro: "Pro",
   business: "Business"
 };
+
+const PUBLIC_SIGNUP_PLAN_HIGHLIGHT: Record<PublicSignupPlanSlug, string> = {
+  start: "Ideal para começar com a agência enxuta.",
+  pro: "Mais equipe, mais automação e IA habilitada.",
+  business: "Operação completa para a agência toda."
+};
+
+const FALLBACK_PUBLIC_SIGNUP_PRICES_CENTS: Record<PublicSignupPlanSlug, number> = {
+  start: 4900,
+  pro: 9900,
+  business: 19900
+};
+
+const publicSignupCurrencyFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL"
+});
 
 export function isPublicSignupPlanSlug(value: string): value is PublicSignupPlanSlug {
   return PUBLIC_SIGNUP_PLAN_SLUGS.includes(value as PublicSignupPlanSlug);
@@ -30,6 +58,37 @@ export function normalizePublicSignupPlanSlug(value: string | null | undefined) 
 export function resolveCommercialPlanCodeFromSignupPlan(plan: PublicSignupPlanSlug): CommercialPlanCode {
   return PUBLIC_SIGNUP_PLAN_MAP[plan];
 }
+
+export function resolvePublicSignupPlanFromCommercialCode(code: string | null | undefined) {
+  if (!code) return null;
+  const normalizedCode = code.trim().toLowerCase() as CommercialPlanCode;
+  const mapped = COMMERCIAL_TO_PUBLIC_PLAN_MAP[normalizedCode];
+  return mapped ?? null;
+}
+
+export function formatPublicSignupPriceLabel(priceCents: number) {
+  const normalizedPrice = Number.isFinite(priceCents) ? Math.max(0, Math.round(priceCents)) : 0;
+  return `${publicSignupCurrencyFormatter.format(normalizedPrice / 100)}/mês`;
+}
+
+export function buildPublicSignupPlanOption(
+  slug: PublicSignupPlanSlug,
+  overrides?: Partial<Pick<PublicSignupPlanOption, "label" | "priceCents" | "highlight">>
+): PublicSignupPlanOption {
+  const priceCents = overrides?.priceCents ?? FALLBACK_PUBLIC_SIGNUP_PRICES_CENTS[slug];
+
+  return {
+    slug,
+    label: overrides?.label ?? PUBLIC_SIGNUP_PLAN_LABEL[slug],
+    priceCents,
+    priceLabel: formatPublicSignupPriceLabel(priceCents),
+    highlight: overrides?.highlight ?? PUBLIC_SIGNUP_PLAN_HIGHLIGHT[slug]
+  };
+}
+
+export const DEFAULT_PUBLIC_SIGNUP_PLAN_OPTIONS: PublicSignupPlanOption[] = PUBLIC_SIGNUP_PLAN_SLUGS.map((slug) =>
+  buildPublicSignupPlanOption(slug)
+);
 
 export function normalizeSignupSlug(value: string) {
   const normalized = normalizeAgencySlug(value);

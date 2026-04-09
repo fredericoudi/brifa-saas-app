@@ -37,10 +37,10 @@ export default async function PlatformAgenciesPage() {
                 name: "",
                 slug: "",
                 plan: "starter",
-                status: "trial",
+                status: "active",
                 adminEmail: "",
                 adminName: "",
-                trialStartsAt: new Date().toISOString().slice(0, 10),
+                trialStartsAt: "",
                 trialEndsAt: ""
               }}
               planOptions={activePlanOptions}

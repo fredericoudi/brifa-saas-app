@@ -1,0 +1,23 @@
+/*
+Theme Name: BRIFA
+Theme URI: https://brifa-site.vercel.app
+Author: JThemes
+Author URI: http://themeforest.net/user/jthemes
+Description: BRIFA landing page for agency operations and workflow management.
+Version: 1.0.4.3
+Requires at least: 4.7
+Tested up to: 6.2
+Requires PHP: 5.6
+License: GPLv2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
+Tags: one-column, two-columns, three-columns, right-sidebar, flexible-header, custom-colors,  custom-background, custom-header, custom-menu, custom-logo, editor-style, featured-images, footer-widgets, post-formats, rtl-language-support, sticky-post, threaded-comments, translation-ready
+Text Domain: brifa
+*/
+
+.header-wrapper {
+  margin-top: var(--wp-admin--admin-bar--height);
+}
+
+.elementor-editor-active #loading {
+  display: none !important
+}

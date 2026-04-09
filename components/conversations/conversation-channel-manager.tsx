@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import type { SanitizedAgencyChannel } from "@/lib/conversation-admin";
+import type { SanitizedConversationChannel } from "@/lib/conversation-admin";
 import { CONVERSATION_PROVIDER_LABEL } from "@/services/conversation/providers/catalog";
 
 type ManageableConversationProvider = Exclude<keyof typeof CONVERSATION_PROVIDER_LABEL, "internal_test">;
@@ -14,10 +14,12 @@ const PROVIDER_OPTIONS: ManageableConversationProvider[] = ["meta_cloud", "twili
 
 export function ConversationChannelManager({
   initialChannel,
-  webhookUrl
+  webhookUrl,
+  saveEndpoint = "/api/conversations/channel"
 }: {
-  initialChannel: SanitizedAgencyChannel | null;
+  initialChannel: SanitizedConversationChannel | null;
   webhookUrl: string;
+  saveEndpoint?: string;
 }) {
   const [channel, setChannel] = useState(initialChannel);
   const [provider, setProvider] = useState<ManageableConversationProvider>(
@@ -47,7 +49,7 @@ export function ConversationChannelManager({
       setSaving(true);
       setFeedback(null);
 
-      const response = await fetch("/api/conversations/channel", {
+      const response = await fetch(saveEndpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -66,7 +68,7 @@ export function ConversationChannelManager({
 
       const payload = (await response.json()) as {
         error?: string;
-        channel?: SanitizedAgencyChannel;
+        channel?: SanitizedConversationChannel;
       };
 
       if (!response.ok || !payload.channel) {

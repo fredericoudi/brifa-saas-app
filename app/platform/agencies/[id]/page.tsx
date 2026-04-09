@@ -202,7 +202,7 @@ export default async function PlatformAgencyDetailsPage({ params }: { params: { 
                 name: agency.name,
                 slug: agency.slug,
                 plan: normalizeCommercialPlanCode(currentPlan?.code ?? "starter") ?? "starter",
-                status: resolvedSubscription?.status ?? "trial",
+                status: resolvedSubscription?.status ?? "active",
                 adminEmail: pendingInvitation?.email ?? primaryAdmin?.email ?? "",
                 adminName: pendingInvitation?.name ?? primaryAdmin?.name ?? "",
                 trialStartsAt: resolvedSubscription?.trial_started_at?.slice(0, 10) ?? "",

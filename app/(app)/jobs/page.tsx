@@ -131,12 +131,16 @@ export default function JobsPage() {
   const [form, setForm] = useState<JobForm>(INITIAL_FORM);
   const [removedTaskIds, setRemovedTaskIds] = useState<string[]>([]);
   const [editingSnapshot, setEditingSnapshot] = useState<EditingSnapshot | null>(null);
+  const [aiLimitModalOpen, setAiLimitModalOpen] = useState(false);
+  const [aiLimitModalMessage, setAiLimitModalMessage] = useState("");
+  const [aiLimitModalTrialActivated, setAiLimitModalTrialActivated] = useState(false);
+  const [activatingTrial, setActivatingTrial] = useState(false);
 
   const isEditing = useMemo(() => Boolean(form.id), [form.id]);
   const isAdmin = profile?.role === "admin";
-  const createJobPermission = commercialContext?.permissions.create_job ?? { allowed: true, message: null };
-  const createTaskPermission = commercialContext?.permissions.create_task ?? { allowed: true, message: null };
-  const aiBriefingPermission = commercialContext?.permissions.ai_briefing ?? { allowed: true, message: null };
+  const createJobPermission = commercialContext?.permissions.create_job ?? { allowed: true, message: null, reason: null };
+  const createTaskPermission = commercialContext?.permissions.create_task ?? { allowed: true, message: null, reason: null };
+  const aiBriefingPermission = commercialContext?.permissions.ai_briefing ?? { allowed: true, message: null, reason: null };
   const readOnlyMode = commercialContext?.readOnlyMode ?? false;
 
   async function loadData() {
@@ -487,6 +491,13 @@ export default function JobsPage() {
     }
 
     if (!aiBriefingPermission.allowed) {
+      if (aiBriefingPermission.reason === "limit_reached") {
+        setAiLimitModalMessage(aiBriefingPermission.message ?? "Você atingiu o limite de IA do seu plano.");
+        setAiLimitModalTrialActivated(Boolean(commercialContext?.trial.activated));
+        setAiLimitModalOpen(true);
+        return;
+      }
+
       setError(aiBriefingPermission.message ?? "A geração de briefing com IA está bloqueada.");
       return;
     }
@@ -502,10 +513,27 @@ export default function JobsPage() {
         body: JSON.stringify({ necessidade: necessidadeCliente })
       });
 
-      const result = (await response.json()) as { error?: string; briefing?: string };
+      const result = (await response.json()) as {
+        error?: string;
+        message?: string;
+        briefing?: string;
+        type?: string;
+        trialActivated?: boolean;
+      };
 
-      if (!response.ok || !result.briefing) {
-        throw new Error(result.error ?? "Falha ao gerar briefing com IA.");
+      if (!response.ok) {
+        if (result.error === "LIMIT_REACHED" && result.type === "AI") {
+          setAiLimitModalMessage(result.message ?? "Você atingiu o limite de IA do plano Starter.");
+          setAiLimitModalTrialActivated(Boolean(result.trialActivated ?? commercialContext?.trial.activated));
+          setAiLimitModalOpen(true);
+          return;
+        }
+
+        throw new Error(result.message ?? result.error ?? "Falha ao gerar briefing com IA.");
+      }
+
+      if (!result.briefing) {
+        throw new Error(result.message ?? result.error ?? "Falha ao gerar briefing com IA.");
       }
 
       setForm((prev) => ({ ...prev, description: result.briefing ?? prev.description }));
@@ -514,6 +542,53 @@ export default function JobsPage() {
       setError(generateError instanceof Error ? generateError.message : "Falha ao gerar briefing com IA.");
     } finally {
       setGeneratingBriefing(false);
+    }
+  }
+
+  async function handleActivateTrial() {
+    try {
+      setActivatingTrial(true);
+      setError("");
+      setSuccess("");
+
+      const response = await fetch("/api/subscription/trial/activate", {
+        method: "POST"
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            error?: string;
+            message?: string;
+            context?: AgencyCommercialContext;
+          }
+        | null;
+
+      if (!response.ok) {
+        if (payload?.error === "TRIAL_ALREADY_ACTIVATED") {
+          setAiLimitModalTrialActivated(true);
+          if (payload.context) {
+            setCommercialContext(payload.context);
+          }
+          window.dispatchEvent(new Event("commercial-context:refresh"));
+          return;
+        }
+
+        throw new Error(payload?.error ?? payload?.message ?? "Não foi possível liberar o acesso completo.");
+      }
+
+      window.dispatchEvent(new Event("commercial-context:refresh"));
+      if (payload?.context) {
+        setCommercialContext(payload.context);
+      } else {
+        await loadData();
+      }
+
+      setAiLimitModalOpen(false);
+      setSuccess("Acesso completo liberado por 7 dias. Gere novamente o briefing para continuar.");
+    } catch (activateError) {
+      setError(activateError instanceof Error ? activateError.message : "Não foi possível liberar o acesso completo.");
+    } finally {
+      setActivatingTrial(false);
     }
   }
 
@@ -973,6 +1048,61 @@ export default function JobsPage() {
             </form>
           </CardContent>
         </Card>
+      ) : null}
+
+      {aiLimitModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <Card className="w-full max-w-xl">
+            <CardHeader>
+              <h3 className="text-lg font-semibold text-text">🚀 Sua agência está crescendo!</h3>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {aiLimitModalTrialActivated ? (
+                <>
+                  <p className="text-sm text-text">{aiLimitModalMessage || "Você atingiu o limite de IA do seu plano."}</p>
+                  <p className="text-sm text-muted">Desbloqueie IA ilimitada para continuar criando sem travar sua operação.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-text">Você atingiu o limite de IA do plano Starter.</p>
+                  <p className="text-sm text-muted">
+                    Libere acesso completo por 7 dias e continue criando sem limites.
+                  </p>
+                </>
+              )}
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  onClick={() => {
+                    if (aiLimitModalTrialActivated) {
+                      setAiLimitModalOpen(false);
+                      router.push("/settings#assinatura");
+                      return;
+                    }
+
+                    void handleActivateTrial();
+                  }}
+                  disabled={activatingTrial}
+                >
+                  {aiLimitModalTrialActivated
+                    ? "Desbloquear IA ilimitada"
+                    : activatingTrial
+                      ? "Liberando acesso..."
+                      : "Liberar acesso completo por 7 dias"}
+                </Button>
+                {!aiLimitModalTrialActivated ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => setAiLimitModalOpen(false)}
+                    disabled={activatingTrial}
+                  >
+                    Continuar no plano gratuito
+                  </Button>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       ) : null}
 
     </div>

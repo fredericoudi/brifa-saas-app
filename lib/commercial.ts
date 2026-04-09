@@ -17,8 +17,27 @@ export const COMMERCIAL_SUBSCRIPTION_STATUSES = [
 ] as const;
 export type CommercialSubscriptionStatus = (typeof COMMERCIAL_SUBSCRIPTION_STATUSES)[number];
 
+export const LIMITS = {
+  STARTER: {
+    clients: 3,
+    users: 3,
+    aiGenerations: 5
+  },
+  PRO: {
+    clients: Number.POSITIVE_INFINITY,
+    users: 5,
+    aiGenerations: 100
+  },
+  BUSINESS: {
+    clients: Number.POSITIVE_INFINITY,
+    users: 10,
+    aiGenerations: Number.POSITIVE_INFINITY
+  }
+} as const;
+
 export type EffectiveSubscriptionStatus = CommercialSubscriptionStatus | "trial_expired";
-export type CommercialAction = "create_job" | "create_task" | "invite_user" | "ai_briefing" | "google_drive";
+export type CommercialAction = "create_job" | "create_task" | "create_client" | "invite_user" | "ai_briefing" | "google_drive";
+export type CommercialPermissionReason = "subscription_blocked" | "limit_reached" | "feature_unavailable";
 
 export const COMMERCIAL_STATUS_LABEL: Record<EffectiveSubscriptionStatus, string> = {
   trial: "Trial",
@@ -49,6 +68,14 @@ export type AgencyCommercialContext = {
   usage: {
     users: number;
     jobs: number;
+    clients: number;
+    aiGenerations: number;
+  };
+  trial: {
+    activated: boolean;
+    active: boolean;
+    expired: boolean;
+    daysLeft: number;
   };
   effectiveStatus: EffectiveSubscriptionStatus;
   readOnlyMode: boolean;
@@ -57,6 +84,7 @@ export type AgencyCommercialContext = {
     {
       allowed: boolean;
       message: string | null;
+      reason: CommercialPermissionReason | null;
     }
   >;
 };
@@ -68,15 +96,15 @@ const LEGACY_PLAN_CATALOG: Record<
   starter: {
     code: "starter",
     name: "Starter",
-    max_users: 5,
+    max_users: 3,
     max_jobs: 100,
-    ai_briefing_enabled: false,
+    ai_briefing_enabled: true,
     google_drive_enabled: false
   },
   growth: {
     code: "growth",
     name: "Growth",
-    max_users: 15,
+    max_users: 5,
     max_jobs: null,
     ai_briefing_enabled: true,
     google_drive_enabled: true
@@ -84,7 +112,7 @@ const LEGACY_PLAN_CATALOG: Record<
   pro: {
     code: "pro",
     name: "Pro",
-    max_users: 15,
+    max_users: 5,
     max_jobs: null,
     ai_briefing_enabled: true,
     google_drive_enabled: true
@@ -92,15 +120,43 @@ const LEGACY_PLAN_CATALOG: Record<
   agency: {
     code: "agency",
     name: "Agency",
-    max_users: null,
+    max_users: 10,
     max_jobs: null,
     ai_briefing_enabled: true,
     google_drive_enabled: true
   }
 };
 
+type FreemiumPlanType = keyof typeof LIMITS;
+
 function isCommercialPlanCode(value: string): value is CommercialPlanCode {
   return COMMERCIAL_PLAN_CODES.includes(value as CommercialPlanCode);
+}
+
+function isMissingSupabaseTable(message: string, table: string) {
+  return message.includes(`Could not find the table 'public.${table}'`) || message.includes(`relation \"${table}\" does not exist`);
+}
+
+function resolveFreemiumPlan(planCode: string | null | undefined): FreemiumPlanType {
+  if (planCode === "pro" || planCode === "growth") {
+    return "PRO";
+  }
+
+  if (planCode === "agency") {
+    return "BUSINESS";
+  }
+
+  return "STARTER";
+}
+
+function resolveFreemiumPlanLabel(plan: FreemiumPlanType) {
+  if (plan === "BUSINESS") return "Business";
+  if (plan === "PRO") return "Pro";
+  return "Starter";
+}
+
+function formatFiniteLimit(limit: number) {
+  return Number.isFinite(limit) ? String(limit) : "ilimitado";
 }
 
 export function normalizeCommercialPlanCode(value: string) {
@@ -124,6 +180,87 @@ export function formatPlanLimit(limit: number | null | undefined) {
   return limit == null ? "Ilimitado" : String(limit);
 }
 
+export function isTrialActive(agency: {
+  trial_ends_at?: string | null;
+  trialEndDate?: string | null;
+}) {
+  const trialEndDate = agency.trialEndDate ?? agency.trial_ends_at ?? null;
+
+  if (!trialEndDate) return false;
+  return new Date(trialEndDate).getTime() > Date.now();
+}
+
+export function isTrialActivated(agency: {
+  trial_activated?: boolean | null;
+  trialActivated?: boolean | null;
+  trial_starts_at?: string | null;
+  trialStartDate?: string | null;
+  trial_ends_at?: string | null;
+  trialEndDate?: string | null;
+}) {
+  if (agency.trialActivated != null) return Boolean(agency.trialActivated);
+  if (agency.trial_activated != null) return Boolean(agency.trial_activated);
+
+  return Boolean(
+    agency.trialStartDate ??
+      agency.trial_starts_at ??
+      agency.trialEndDate ??
+      agency.trial_ends_at
+  );
+}
+
+export function canActivateTrial(agency: {
+  trial_activated?: boolean | null;
+  trialActivated?: boolean | null;
+  trial_starts_at?: string | null;
+  trialStartDate?: string | null;
+  trial_ends_at?: string | null;
+  trialEndDate?: string | null;
+}) {
+  return !isTrialActivated(agency);
+}
+
+export function getTrialDaysLeft(agency: {
+  trial_ends_at?: string | null;
+  trialEndDate?: string | null;
+}) {
+  const trialEndDate = agency.trialEndDate ?? agency.trial_ends_at ?? null;
+  if (!trialEndDate) return 0;
+
+  const diff = new Date(trialEndDate).getTime() - Date.now();
+  if (diff <= 0) return 0;
+
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+export function canCreateClient(agency: {
+  plan: string | null | undefined;
+  trial_ends_at?: string | null;
+  trialEndDate?: string | null;
+  status?: string | null;
+  clientsCount: number;
+}) {
+  if (isTrialActive(agency)) return true;
+
+  const limit = LIMITS[resolveFreemiumPlan(agency.plan)].clients;
+  return agency.clientsCount < limit;
+}
+
+export function canUseAI(
+  agency: {
+    plan: string | null | undefined;
+    trial_ends_at?: string | null;
+    trialEndDate?: string | null;
+    status?: string | null;
+  },
+  aiUsageCount: number
+) {
+  if (isTrialActive(agency)) return true;
+
+  const limit = LIMITS[resolveFreemiumPlan(agency.plan)].aiGenerations;
+  return aiUsageCount < limit;
+}
+
 export function isTrialExpired(subscription: Pick<AgencySubscription, "status" | "trial_ends_at">) {
   if (subscription.status !== "trial") return false;
   if (!subscription.trial_ends_at) return false;
@@ -135,10 +272,6 @@ export function resolveEffectiveSubscriptionStatus(subscription: Pick<AgencySubs
 }
 
 function getSubscriptionStatusMessage(status: EffectiveSubscriptionStatus) {
-  if (status === "trial_expired") {
-    return "Seu período de teste expirou. Para continuar criando jobs e tarefas, entre em contato para ativar seu plano.";
-  }
-
   if (status === "past_due") {
     return "Sua assinatura está com pagamento pendente. O acesso segue em modo de visualização até a regularização.";
   }
@@ -158,47 +291,111 @@ function getSubscriptionStatusMessage(status: EffectiveSubscriptionStatus) {
   return null;
 }
 
-export function evaluateCommercialAction(context: Pick<AgencyCommercialContext, "plan" | "subscription" | "usage" | "effectiveStatus">, action: CommercialAction) {
+export function evaluateCommercialAction(
+  context: Pick<AgencyCommercialContext, "plan" | "subscription" | "usage" | "effectiveStatus" | "trial">,
+  action: CommercialAction
+) {
+  const trialActive = context.trial.active;
+
+  if (trialActive) {
+    return {
+      allowed: true,
+      message: null,
+      reason: null
+    };
+  }
+
   const statusMessage = getSubscriptionStatusMessage(context.effectiveStatus);
 
   if (statusMessage) {
     return {
       allowed: false,
-      message: statusMessage
+      message: statusMessage,
+      reason: "subscription_blocked" as const
     };
   }
 
-  if (action === "invite_user" && context.plan.max_users != null && context.usage.users >= context.plan.max_users) {
+  const planCodeForLimits = context.effectiveStatus === "trial_expired" ? "starter" : context.plan.code;
+  const freemiumPlan = resolveFreemiumPlan(planCodeForLimits);
+  const freemiumLimit = LIMITS[freemiumPlan];
+  const freemiumPlanLabel = resolveFreemiumPlanLabel(freemiumPlan);
+
+  if (action === "create_client") {
+    if (!canCreateClient({
+      plan: planCodeForLimits,
+      status: context.subscription.status,
+      trial_ends_at: context.subscription.trial_ends_at,
+      clientsCount: context.usage.clients
+    })) {
+      return {
+        allowed: false,
+        message: `Você atingiu o limite de ${formatFiniteLimit(freemiumLimit.clients)} clientes no plano ${freemiumPlanLabel}.`,
+        reason: "limit_reached" as const
+      };
+    }
+
     return {
-      allowed: false,
-      message: "Seu plano atual atingiu o limite de usuários. Faça upgrade para adicionar mais pessoas."
+      allowed: true,
+      message: null,
+      reason: null
     };
   }
 
-  if (action === "create_job" && context.plan.max_jobs != null && context.usage.jobs >= context.plan.max_jobs) {
+  if (action === "invite_user" && context.usage.users >= freemiumLimit.users) {
     return {
       allowed: false,
-      message: "Seu plano atual atingiu o limite de jobs. Faça upgrade para continuar criando novos jobs."
+      message: `Você atingiu o limite de ${formatFiniteLimit(freemiumLimit.users)} usuários no plano ${freemiumPlanLabel}.`,
+      reason: "limit_reached" as const
     };
   }
 
-  if (action === "ai_briefing" && !context.plan.ai_briefing_enabled) {
+  const maxJobsLimit = context.effectiveStatus === "trial_expired" ? 100 : context.plan.max_jobs;
+
+  if (action === "create_job" && maxJobsLimit != null && context.usage.jobs >= maxJobsLimit) {
     return {
       allowed: false,
-      message: "A geração de briefing com IA não está disponível no seu plano atual."
+      message: "Seu plano atual atingiu o limite de jobs. Faça upgrade para continuar criando novos jobs.",
+      reason: "limit_reached" as const
     };
   }
 
-  if (action === "google_drive" && !context.plan.google_drive_enabled) {
+  if (action === "ai_briefing") {
+    if (!canUseAI(
+      {
+        plan: planCodeForLimits,
+        status: context.subscription.status,
+        trial_ends_at: context.subscription.trial_ends_at
+      },
+      context.usage.aiGenerations
+    )) {
+      return {
+        allowed: false,
+        message: `Você atingiu o limite de ${formatFiniteLimit(freemiumLimit.aiGenerations)} gerações de IA no plano ${freemiumPlanLabel}.`,
+        reason: "limit_reached" as const
+      };
+    }
+
+    return {
+      allowed: true,
+      message: null,
+      reason: null
+    };
+  }
+
+  const googleDriveEnabled = context.effectiveStatus === "trial_expired" ? false : context.plan.google_drive_enabled;
+
+  if (action === "google_drive" && !googleDriveEnabled) {
     return {
       allowed: false,
-      message: "A integração com Google Drive não está disponível no seu plano atual."
+      message: "A integração com Google Drive não está disponível no seu plano atual.",
+      reason: "feature_unavailable" as const
     };
   }
 
   return {
     allowed: true,
-    message: null
+    message: null,
+    reason: null
   };
 }
 
@@ -233,6 +430,56 @@ async function countActiveJobs({
   return response.count ?? 0;
 }
 
+async function countClients({
+  supabase,
+  agencyId
+}: {
+  supabase: SupabaseClient<Database>;
+  agencyId: string;
+}) {
+  const { count, error } = await supabase.from("clients").select("id", { count: "exact", head: true }).eq("agency_id", agencyId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return count ?? 0;
+}
+
+async function countAiGenerations({
+  supabase,
+  agencyId
+}: {
+  supabase: SupabaseClient<Database>;
+  agencyId: string;
+}) {
+  const aiLogsResponse = await supabase.from("ai_logs").select("id", { count: "exact", head: true }).eq("agency_id", agencyId);
+
+  if (!aiLogsResponse.error) {
+    return aiLogsResponse.count ?? 0;
+  }
+
+  const fallbackResponse = await supabase
+    .from("ai_actions_log")
+    .select("id", { count: "exact", head: true })
+    .eq("agency_id", agencyId)
+    .eq("action_type", "generate_briefing")
+    .eq("status", "success");
+
+  if (fallbackResponse.error) {
+    if (
+      isMissingSupabaseTable(fallbackResponse.error.message, "ai_actions_log") ||
+      fallbackResponse.error.message.toLowerCase().includes("permission denied")
+    ) {
+      return 0;
+    }
+
+    throw new Error(fallbackResponse.error.message);
+  }
+
+  return fallbackResponse.count ?? 0;
+}
+
 async function buildLegacyCommercialContext({
   supabase,
   agencyId
@@ -240,14 +487,16 @@ async function buildLegacyCommercialContext({
   supabase: SupabaseClient<Database>;
   agencyId: string;
 }): Promise<AgencyCommercialContext> {
-  const [{ data: rawAgency, error: agencyError }, { count: usersCount }, jobsCount] = await Promise.all([
+  const [{ data: rawAgency, error: agencyError }, { count: usersCount }, jobsCount, clientsCount, aiGenerations] = await Promise.all([
     supabase
       .from("agencies")
-      .select("id, name, plan, status, created_at, trial_starts_at, trial_ends_at")
+      .select("id, name, plan, status, trial_activated, created_at, trial_starts_at, trial_ends_at")
       .eq("id", agencyId)
       .maybeSingle(),
     supabase.from("users").select("id", { count: "exact", head: true }).eq("agency_id", agencyId),
-    countActiveJobs({ supabase, agencyId })
+    countActiveJobs({ supabase, agencyId }),
+    countClients({ supabase, agencyId }),
+    countAiGenerations({ supabase, agencyId })
   ]);
 
   if (agencyError || !rawAgency) {
@@ -290,23 +539,43 @@ async function buildLegacyCommercialContext({
 
   const usage = {
     users: usersCount ?? 0,
-    jobs: jobsCount
+    jobs: jobsCount,
+    clients: clientsCount,
+    aiGenerations
   };
   const effectiveStatus: EffectiveSubscriptionStatus = resolveEffectiveSubscriptionStatus(subscription);
 
-  const baseContext: Pick<AgencyCommercialContext, "plan" | "subscription" | "usage" | "effectiveStatus"> = {
+  const trialActivated = isTrialActivated({
+    trial_activated: rawAgency.trial_activated,
+    trial_starts_at: subscription.trial_started_at ?? rawAgency.trial_starts_at,
+    trial_ends_at: subscription.trial_ends_at ?? rawAgency.trial_ends_at
+  });
+  const trialEndDate = subscription.trial_ends_at ?? rawAgency.trial_ends_at;
+  const trialActive = trialActivated && isTrialActive({ trialEndDate });
+  const trialExpired = effectiveStatus === "trial_expired";
+  const trial = {
+    activated: trialActivated,
+    active: trialActive,
+    expired: trialExpired,
+    daysLeft: trialActivated ? getTrialDaysLeft({ trialEndDate }) : 0
+  };
+
+  const baseContext: Pick<AgencyCommercialContext, "plan" | "subscription" | "usage" | "effectiveStatus" | "trial"> = {
     plan,
     subscription,
     usage,
-    effectiveStatus
+    effectiveStatus,
+    trial
   };
 
   return {
     ...baseContext,
-    readOnlyMode: ["past_due", "canceled", "suspended", "pending_payment", "trial_expired"].includes(effectiveStatus),
+    trial,
+    readOnlyMode: ["past_due", "canceled", "suspended", "pending_payment"].includes(effectiveStatus),
     permissions: {
       create_job: evaluateCommercialAction(baseContext, "create_job"),
       create_task: evaluateCommercialAction(baseContext, "create_task"),
+      create_client: evaluateCommercialAction(baseContext, "create_client"),
       invite_user: evaluateCommercialAction(baseContext, "invite_user"),
       ai_briefing: evaluateCommercialAction(baseContext, "ai_briefing"),
       google_drive: evaluateCommercialAction(baseContext, "google_drive")
@@ -321,11 +590,29 @@ export async function getAgencyCommercialContext({
   supabase: SupabaseClient<Database>;
   agencyId: string;
 }): Promise<AgencyCommercialContext> {
-  const [{ data: rawSubscription, error: subscriptionError }, { count: usersCount }, jobsCount] = await Promise.all([
+  const [
+    { data: rawAgency, error: agencyError },
+    { data: rawSubscription, error: subscriptionError },
+    { count: usersCount },
+    jobsCount,
+    clientsCount,
+    aiGenerations
+  ] = await Promise.all([
+    supabase
+      .from("agencies")
+      .select("id, trial_activated, trial_starts_at, trial_ends_at")
+      .eq("id", agencyId)
+      .maybeSingle(),
     supabase.from("agency_subscriptions").select("*").eq("agency_id", agencyId).maybeSingle(),
     supabase.from("users").select("id", { count: "exact", head: true }).eq("agency_id", agencyId),
-    countActiveJobs({ supabase, agencyId })
+    countActiveJobs({ supabase, agencyId }),
+    countClients({ supabase, agencyId }),
+    countAiGenerations({ supabase, agencyId })
   ]);
+
+  if (agencyError || !rawAgency) {
+    throw new Error(agencyError?.message ?? "Agência não encontrada para resolver permissões comerciais.");
+  }
 
   if (subscriptionError || !rawSubscription) {
     return buildLegacyCommercialContext({ supabase, agencyId });
@@ -342,20 +629,40 @@ export async function getAgencyCommercialContext({
   const plan = rawPlan as Plan;
   const usage = {
     users: usersCount ?? 0,
-    jobs: jobsCount
+    jobs: jobsCount,
+    clients: clientsCount,
+    aiGenerations
   };
   const effectiveStatus: EffectiveSubscriptionStatus = resolveEffectiveSubscriptionStatus(subscription);
 
-  const baseContext: Pick<AgencyCommercialContext, "plan" | "subscription" | "usage" | "effectiveStatus"> = {
+  const trialActivated = isTrialActivated({
+    trial_activated: rawAgency.trial_activated,
+    trial_starts_at: subscription.trial_started_at ?? rawAgency.trial_starts_at,
+    trial_ends_at: subscription.trial_ends_at ?? rawAgency.trial_ends_at
+  });
+  const trialEndDate = subscription.trial_ends_at ?? rawAgency.trial_ends_at;
+  const trialActive = trialActivated && isTrialActive({ trialEndDate });
+  const trialExpired = effectiveStatus === "trial_expired";
+
+  const trial = {
+    activated: trialActivated,
+    active: trialActive,
+    expired: trialExpired,
+    daysLeft: trialActivated ? getTrialDaysLeft({ trialEndDate }) : 0
+  };
+
+  const baseContext: Pick<AgencyCommercialContext, "plan" | "subscription" | "usage" | "effectiveStatus" | "trial"> = {
     plan,
     subscription,
     usage,
-    effectiveStatus
+    effectiveStatus,
+    trial
   };
 
   const permissions: AgencyCommercialContext["permissions"] = {
     create_job: evaluateCommercialAction(baseContext, "create_job"),
     create_task: evaluateCommercialAction(baseContext, "create_task"),
+    create_client: evaluateCommercialAction(baseContext, "create_client"),
     invite_user: evaluateCommercialAction(baseContext, "invite_user"),
     ai_briefing: evaluateCommercialAction(baseContext, "ai_briefing"),
     google_drive: evaluateCommercialAction(baseContext, "google_drive")
@@ -363,7 +670,7 @@ export async function getAgencyCommercialContext({
 
   return {
     ...baseContext,
-    readOnlyMode: ["past_due", "canceled", "suspended", "pending_payment", "trial_expired"].includes(effectiveStatus),
+    readOnlyMode: ["past_due", "canceled", "suspended", "pending_payment"].includes(effectiveStatus),
     permissions
   };
 }
@@ -383,6 +690,7 @@ export async function assertAgencyActionAllowed({
   return {
     allowed: permission.allowed,
     message: permission.message,
+    reason: permission.reason,
     context
   };
 }

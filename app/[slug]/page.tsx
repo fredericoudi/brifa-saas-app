@@ -4,7 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import type { CSSProperties } from "react";
 import loginBackground from "@/images/login_bg.webp";
-import logoBrifa from "@/images/logo_brifa.svg";
+import logoBrifa from "@/images/logo_brifa.webp";
 import { LoginFormCard } from "@/components/auth/login-form-card";
 import { BrifaFavicon } from "@/components/layout/brifa-favicon";
 import { AgencyMark } from "@/components/layout/agency-mark";

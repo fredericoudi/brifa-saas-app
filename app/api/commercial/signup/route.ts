@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveAgencyPortalPath } from "@/lib/agency-routing";
+import { validateBrazilianTaxId, validatePostalCode } from "@/lib/brazil";
 import {
   generatePendingAgencyId,
   normalizePublicSignupPlanSlug,
@@ -18,7 +19,13 @@ const signupSchema = z.object({
   slug: z.string().trim().min(1, "Escolha o slug do portal da agência."),
   ownerName: z.string().trim().min(2, "Informe o nome do responsável."),
   ownerEmail: z.string().trim().email("Informe um e-mail válido."),
+  ownerDocument: z.string().trim().min(11, "Informe o CPF ou CNPJ do responsável."),
   ownerPhone: z.string().trim().min(8, "Informe o telefone / WhatsApp do responsável."),
+  billingPostalCode: z.string().trim().min(8, "Informe o CEP da cobrança."),
+  billingAddress: z.string().trim().min(2, "Informe o endereço da cobrança."),
+  billingAddressNumber: z.string().trim().min(1, "Informe o número do endereço."),
+  billingComplement: z.string().trim().optional().nullable(),
+  billingProvince: z.string().trim().min(2, "Informe o bairro da cobrança."),
   plan: z.string().trim().min(1, "Escolha um plano."),
   acceptTerms: z.boolean().refine((value) => value, {
     message: "Você precisa aceitar os termos para continuar."
@@ -27,6 +34,12 @@ const signupSchema = z.object({
 
 function buildPlanLookupErrorMessage(planSlug: string) {
   return `O plano ${planSlug} não está disponível para contratação no momento.`;
+}
+
+function resolveCommercialOrigin(request: Request) {
+  const canonicalOrigin = process.env.NEXT_PUBLIC_SITE_URL?.trim() || process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const fallbackOrigin = new URL(request.url).origin;
+  return (canonicalOrigin || fallbackOrigin).replace(/\/$/, "");
 }
 
 export async function POST(request: Request) {
@@ -57,6 +70,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Informe o WhatsApp no formato 5511999999999." }, { status: 400 });
     }
 
+    const documentValidation = validateBrazilianTaxId(parsed.data.ownerDocument);
+    if (documentValidation.error || !documentValidation.normalized) {
+      return NextResponse.json({ error: documentValidation.error ?? "Informe um CPF ou CNPJ válido." }, { status: 400 });
+    }
+
+    const postalCodeValidation = validatePostalCode(parsed.data.billingPostalCode);
+    if (postalCodeValidation.error || !postalCodeValidation.normalized) {
+      return NextResponse.json({ error: postalCodeValidation.error ?? "Informe um CEP válido." }, { status: 400 });
+    }
+
     const admin = createAdminSupabaseClient();
     const planCode = resolveCommercialPlanCodeFromSignupPlan(publicPlanSlug);
 
@@ -83,7 +106,7 @@ export async function POST(request: Request) {
     if (!plan.active) {
       return NextResponse.json({ error: buildPlanLookupErrorMessage(publicPlanSlug) }, { status: 400 });
     }
-    const origin = new URL(request.url).origin;
+    const origin = resolveCommercialOrigin(request);
     const agencyId = generatePendingAgencyId();
     createdAgencyId = agencyId;
     const ownerEmail = parsed.data.ownerEmail.trim().toLowerCase();
@@ -114,21 +137,25 @@ export async function POST(request: Request) {
       status: "pending_payment"
     });
 
-    const customer = await createAsaasCustomer({
+    const asaasCustomer = await createAsaasCustomer({
       name: parsed.data.ownerName.trim(),
       email: ownerEmail,
       phoneNumber: normalizedPhone,
+      document: documentValidation.normalized,
+      postalCode: postalCodeValidation.normalized,
+      address: parsed.data.billingAddress.trim(),
+      addressNumber: parsed.data.billingAddressNumber.trim(),
+      complement: parsed.data.billingComplement?.trim() || null,
+      province: parsed.data.billingProvince.trim(),
       externalReference: agencyId
     });
 
     const checkout = await createAsaasCheckoutSession({
-      customerId: customer.id,
       agencyId,
+      agencyName: parsed.data.agencyName.trim(),
+      customerId: asaasCustomer.id,
       planName: plan.name,
       priceCents: plan.price_cents,
-      ownerName: parsed.data.ownerName.trim(),
-      ownerEmail,
-      ownerPhone: normalizedPhone,
       successUrl: `${origin}/signup?plan=${publicPlanSlug}&status=processing&agency=${normalizedSlug.normalized}`,
       cancelUrl: `${origin}/signup?plan=${publicPlanSlug}&status=canceled`
     });
@@ -137,7 +164,6 @@ export async function POST(request: Request) {
       admin
         .from("agency_subscriptions")
         .update({
-          external_customer_id: customer.id,
           external_subscription_id: checkout.subscription,
           payment_provider: "asaas"
         })
@@ -147,7 +173,7 @@ export async function POST(request: Request) {
         plan_id: plan.id,
         provider: "asaas",
         provider_checkout_id: checkout.id,
-        provider_customer_id: customer.id,
+        provider_customer_id: checkout.customer ?? asaasCustomer.id,
         provider_subscription_id: checkout.subscription,
         checkout_url: checkout.url,
         status: "pending",

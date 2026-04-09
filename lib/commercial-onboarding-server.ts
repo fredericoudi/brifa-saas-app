@@ -62,7 +62,8 @@ export async function sendAgencyAccessReadyEmail({
   ownerEmail,
   planName,
   onboardingToken,
-  origin
+  origin,
+  mode
 }: {
   agencyName: string;
   agencySlug: string;
@@ -71,6 +72,7 @@ export async function sendAgencyAccessReadyEmail({
   planName: string;
   onboardingToken: string;
   origin: string | null;
+  mode: "trial" | "active";
 }) {
   const baseOrigin = (origin ?? process.env.NEXT_PUBLIC_SITE_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(
     /\/$/,
@@ -82,6 +84,7 @@ export async function sendAgencyAccessReadyEmail({
     ownerName,
     agencyName,
     planName,
+    mode,
     portalLink: buildAgencyPortalLink(baseOrigin, agencySlug),
     activationLink: buildOnboardingActivationLink({
       origin: baseOrigin,

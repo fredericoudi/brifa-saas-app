@@ -9,17 +9,21 @@ import {
   Grid2x2,
   LayoutDashboard,
   Menu,
+  MessageSquareText,
   Settings,
   ShieldCheck,
   Users,
   X
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type CSSProperties, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PlatformFavicon } from "@/components/platform/platform-favicon";
 import { resolvePlatformLoginPath, resolvePlatformPath } from "@/lib/agency-routing";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+
+const MASTER_SIDEBAR_WIDTH = 345;
+const MASTER_TOPBAR_HEIGHT = 120;
 
 const platformNavItems = [
   { href: resolvePlatformPath(), label: "Dashboard", icon: LayoutDashboard },
@@ -27,6 +31,7 @@ const platformNavItems = [
   { href: resolvePlatformPath("/plans"), label: "Configurar planos", icon: Grid2x2 },
   { href: resolvePlatformPath("/subscriptions"), label: "Assinaturas", icon: CreditCard },
   { href: resolvePlatformPath("/users"), label: "Usuários", icon: Users },
+  { href: resolvePlatformPath("/conversations"), label: "Conversas", icon: MessageSquareText },
   { href: resolvePlatformPath("/settings"), label: "Configurações", icon: Settings }
 ] as const;
 
@@ -36,6 +41,7 @@ const pageTitleMap: Record<string, string> = {
   plans: "Configurar planos",
   subscriptions: "Assinaturas",
   users: "Usuários",
+  conversations: "Conversas",
   settings: "Configurações da Plataforma"
 };
 
@@ -89,12 +95,13 @@ export function PlatformShell({
 
       <aside
         className={cn(
-          "fixed bottom-3 left-3 top-3 z-50 flex w-[18rem] flex-col rounded-[32px] border border-border/80 bg-panel/95 text-text shadow-panel backdrop-blur-xl transition-transform duration-200 lg:bottom-4 lg:left-4 lg:top-4 lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex w-[19.5rem] flex-col border-r border-border/80 bg-panel text-text shadow-panel transition-transform duration-200 lg:w-[var(--master-sidebar-width)] lg:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
+        style={{ ["--master-sidebar-width" as string]: `${MASTER_SIDEBAR_WIDTH}px` }}
       >
-        <div className="border-b border-border/80 px-5 py-5">
-          <div className="flex items-center justify-between gap-3 lg:justify-start">
+        <div className="border-b border-border/80 px-5 py-5 lg:flex lg:h-[120px] lg:items-center lg:px-6 lg:py-0">
+          <div className="flex items-center justify-between gap-3 lg:w-full lg:justify-start">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-brandMuted text-brand shadow-soft">
               <ShieldCheck className="h-5 w-5" />
             </div>
@@ -113,7 +120,7 @@ export function PlatformShell({
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1.5 px-3 py-4">
+        <nav className="flex-1 space-y-1.5 px-4 py-6">
           {platformNavItems.map((item) => {
             const Icon = item.icon;
             const routePath = item.href.split("#")[0];
@@ -128,20 +135,20 @@ export function PlatformShell({
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 rounded-[20px] px-3.5 py-3 text-sm font-medium transition",
+                  "flex h-[58px] items-center gap-3 rounded-[20px] px-4 text-base font-medium transition",
                   isActive
-                    ? "bg-brand text-white shadow-[0_18px_30px_-24px_hsl(var(--brand)/0.95)]"
+                    ? "bg-brand text-white shadow-[0_16px_28px_-22px_hsl(var(--brand)/0.95)]"
                     : "text-muted hover:bg-panelAlt hover:text-text"
                 )}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-[22px] w-[22px]" />
                 <span>{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="border-t border-border/80 px-4 py-4">
+        <div className="border-t border-border/80 bg-panelAlt/55 px-4 py-4">
           <Link
             href="/dashboard"
             className="flex items-center gap-3 rounded-[22px] border border-border bg-panelAlt/60 px-3 py-3 text-sm text-muted transition hover:bg-panelAlt"
@@ -155,9 +162,20 @@ export function PlatformShell({
         </div>
       </aside>
 
-      <div className="lg:pl-[19.75rem]">
-        <header className="fixed left-3 right-3 top-3 z-30 h-[72px] rounded-[28px] border border-border/80 bg-panel/92 shadow-soft backdrop-blur-xl lg:left-[19.75rem] lg:right-4 lg:top-4">
-          <div className="flex h-full items-center justify-between gap-4 px-4 py-3 md:px-5">
+      <div
+        className="lg:pl-[var(--master-sidebar-width)]"
+        style={{ ["--master-sidebar-width" as string]: `${MASTER_SIDEBAR_WIDTH}px` }}
+      >
+        <header
+          className="fixed left-0 right-0 top-0 z-30 h-[88px] border-b border-border/80 bg-panel/96 backdrop-blur-xl lg:left-[var(--master-sidebar-width)] lg:h-[var(--master-topbar-height)]"
+          style={
+            {
+              ["--master-sidebar-width" as string]: `${MASTER_SIDEBAR_WIDTH}px`,
+              ["--master-topbar-height" as string]: `${MASTER_TOPBAR_HEIGHT}px`
+            } as CSSProperties
+          }
+        >
+          <div className="flex h-full items-center justify-between gap-4 px-4 py-3 md:px-6">
             <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
@@ -170,7 +188,7 @@ export function PlatformShell({
 
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">Plataforma</p>
-                <h1 className="truncate text-lg font-semibold text-text">{pageTitle}</h1>
+                <h1 className="truncate text-lg font-semibold text-text lg:text-[1.7rem] lg:tracking-tight">{pageTitle}</h1>
               </div>
             </div>
 
@@ -187,7 +205,12 @@ export function PlatformShell({
           </div>
         </header>
 
-        <main className="px-3 pb-4 pt-[6.25rem] md:px-4 md:pb-6">{children}</main>
+        <main
+          className="px-3 pb-5 pt-[5.75rem] md:px-5 md:pb-7 lg:pt-[var(--master-topbar-height)]"
+          style={{ ["--master-topbar-height" as string]: `${MASTER_TOPBAR_HEIGHT}px` }}
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

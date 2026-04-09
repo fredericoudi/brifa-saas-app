@@ -20,6 +20,7 @@ export type Database = {
           owner_email: string | null;
           owner_phone: string | null;
           activated_at: string | null;
+          trial_activated: boolean;
           trial_starts_at: string | null;
           trial_ends_at: string | null;
           logo_url: string | null;
@@ -37,6 +38,7 @@ export type Database = {
           owner_email?: string | null;
           owner_phone?: string | null;
           activated_at?: string | null;
+          trial_activated?: boolean;
           trial_starts_at?: string | null;
           trial_ends_at?: string | null;
           logo_url?: string | null;
@@ -54,6 +56,7 @@ export type Database = {
           owner_email?: string | null;
           owner_phone?: string | null;
           activated_at?: string | null;
+          trial_activated?: boolean;
           trial_starts_at?: string | null;
           trial_ends_at?: string | null;
           logo_url?: string | null;
@@ -676,6 +679,31 @@ export type Database = {
             foreignKeyName: "ai_actions_log_user_id_fkey";
             columns: ["user_id"];
             referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      ai_logs: {
+        Row: {
+          id: string;
+          agency_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          agency_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          agency_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "ai_logs_agency_id_fkey";
+            columns: ["agency_id"];
+            referencedRelation: "agencies";
             referencedColumns: ["id"];
           }
         ];
@@ -1366,6 +1394,7 @@ export type ConversationAction = Database["public"]["Tables"]["conversation_acti
 export type Conversation = Database["public"]["Tables"]["conversations"]["Row"];
 export type Message = Database["public"]["Tables"]["messages"]["Row"];
 export type AiActionLog = Database["public"]["Tables"]["ai_actions_log"]["Row"];
+export type AILog = Database["public"]["Tables"]["ai_logs"]["Row"];
 export type UserProfile = Database["public"]["Tables"]["users"]["Row"];
 export type Client = Database["public"]["Tables"]["clients"]["Row"];
 export type Job = Database["public"]["Tables"]["jobs"]["Row"];

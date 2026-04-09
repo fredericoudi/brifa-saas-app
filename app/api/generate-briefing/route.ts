@@ -40,6 +40,10 @@ function mapOpenAiErrorMessage(error: unknown) {
   return "Erro ao gerar briefing com IA";
 }
 
+function isMissingAiLogsTable(message: string) {
+  return message.includes("Could not find the table 'public.ai_logs'") || message.includes('relation "ai_logs" does not exist');
+}
+
 export async function POST(req: Request) {
   try {
     const parsed = bodySchema.safeParse(await req.json());
@@ -77,6 +81,18 @@ export async function POST(req: Request) {
     });
 
     if (!commercialAccess.allowed) {
+      if (commercialAccess.reason === "limit_reached") {
+        return NextResponse.json(
+          {
+            error: "LIMIT_REACHED",
+            type: "AI",
+            message: commercialAccess.message ?? "Você atingiu o limite de gerações de IA do seu plano.",
+            trialActivated: commercialAccess.context.trial.activated
+          },
+          { status: 403 }
+        );
+      }
+
       return NextResponse.json(
         { error: commercialAccess.message ?? "A geração de briefing com IA está indisponível para sua assinatura." },
         { status: 403 }
@@ -124,6 +140,33 @@ O briefing deve conter:
 
     if (!briefing) {
       return NextResponse.json({ error: "Erro ao gerar briefing com IA" }, { status: 500 });
+    }
+
+    const { error: aiLogError } = await supabase.from("ai_logs").insert({
+      agency_id: profile.agency_id
+    });
+
+    if (aiLogError) {
+      if (isMissingAiLogsTable(aiLogError.message)) {
+        const { error: fallbackLogError } = await supabase.from("ai_actions_log").insert({
+          agency_id: profile.agency_id,
+          user_id: user.id,
+          action_type: "generate_briefing",
+          status: "success",
+          payload: {
+            source: "job_briefing_form"
+          },
+          result: {
+            chars: briefing.length
+          }
+        });
+
+        if (fallbackLogError) {
+          console.error("Falha ao registrar uso de IA em fallback:", fallbackLogError.message);
+        }
+      } else {
+        console.error("Falha ao registrar uso de IA:", aiLogError.message);
+      }
     }
 
     return NextResponse.json({ briefing });

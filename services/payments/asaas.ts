@@ -89,7 +89,11 @@ function resolveCheckoutUrl(raw: Record<string, unknown>) {
     return directUrl;
   }
 
-  const template = process.env.ASAAS_CHECKOUT_URL_TEMPLATE?.trim();
+  const checkoutBaseUrl = getAsaasApiBaseUrl().includes("sandbox")
+    ? "https://sandbox.asaas.com/checkoutSession/show?id={id}"
+    : "https://asaas.com/checkoutSession/show?id={id}";
+
+  const template = process.env.ASAAS_CHECKOUT_URL_TEMPLATE?.trim() || checkoutBaseUrl;
   const checkoutId = typeof raw.id === "string" ? raw.id : null;
 
   if (template && checkoutId) {
@@ -99,10 +103,22 @@ function resolveCheckoutUrl(raw: Record<string, unknown>) {
   throw new Error("A Asaas não retornou uma URL de checkout utilizável.");
 }
 
+function addMonths(date: Date, months: number) {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  return next;
+}
+
 export async function createAsaasCustomer(input: {
   name: string;
   email: string;
   phoneNumber: string;
+  document: string;
+  postalCode: string;
+  address: string;
+  addressNumber: string;
+  complement?: string | null;
+  province: string;
   externalReference: string;
 }) {
   const payload = (await asaasRequest<Record<string, unknown>>({
@@ -113,6 +129,12 @@ export async function createAsaasCustomer(input: {
       email: input.email,
       mobilePhone: input.phoneNumber,
       phone: input.phoneNumber,
+      cpfCnpj: input.document,
+      postalCode: input.postalCode,
+      address: input.address,
+      addressNumber: input.addressNumber,
+      complement: input.complement ?? undefined,
+      province: input.province,
       externalReference: input.externalReference,
       notificationDisabled: false
     })
@@ -126,31 +148,31 @@ export async function createAsaasCustomer(input: {
 }
 
 export async function createAsaasCheckoutSession(input: {
-  customerId: string;
   agencyId: string;
+  agencyName: string;
+  customerId: string;
   planName: string;
   priceCents: number;
-  ownerName: string;
-  ownerEmail: string;
-  ownerPhone: string;
   successUrl: string;
   cancelUrl: string;
 }) {
+  const nextDueDate = addMonths(new Date(), 1).toISOString().slice(0, 10);
+
   const raw = (await asaasRequest<Record<string, unknown>>({
     path: "/checkouts",
     method: "POST",
     body: JSON.stringify({
       name: `BRIFA — ${input.planName}`,
-      description: `Assinatura mensal do plano ${input.planName} para a agência ${input.ownerName}.`,
-      customer: input.customerId,
-      billingTypes: ["CREDIT_CARD", "PIX", "BOLETO"],
+      description: `Assinatura mensal do plano ${input.planName} para a agência ${input.agencyName}.`,
+      billingTypes: ["CREDIT_CARD"],
       chargeTypes: ["RECURRENT"],
-      subscriptionCycle: "MONTHLY",
+      minutesToExpire: 60,
       callback: {
         successUrl: input.successUrl,
-        autoRedirect: true
+        cancelUrl: input.cancelUrl,
+        expiredUrl: input.cancelUrl
       },
-      redirectUrl: input.cancelUrl,
+      customer: input.customerId,
       externalReference: input.agencyId,
       items: [
         {
@@ -160,10 +182,9 @@ export async function createAsaasCheckoutSession(input: {
           quantity: 1
         }
       ],
-      customerData: {
-        name: input.ownerName,
-        email: input.ownerEmail,
-        mobilePhone: input.ownerPhone
+      subscription: {
+        cycle: "MONTHLY",
+        nextDueDate
       }
     })
   })) as Record<string, unknown>;
@@ -175,7 +196,7 @@ export async function createAsaasCheckoutSession(input: {
   return {
     id: raw.id,
     url: resolveCheckoutUrl(raw),
-    customer: typeof raw.customer === "string" ? raw.customer : input.customerId,
+    customer: typeof raw.customer === "string" ? raw.customer : null,
     subscription: typeof raw.subscription === "string" ? raw.subscription : null,
     raw: raw as Json
   } satisfies AsaasCheckoutSession;
@@ -220,6 +241,26 @@ export function isAsaasDelinquentEvent(event: string, paymentStatus?: string | n
     paymentStatus === "OVERDUE"
     ? true
     : false;
+}
+
+export function isFutureAsaasDueDate(value: string | null | undefined) {
+  if (!value) return false;
+
+  const today = new Date().toISOString().slice(0, 10);
+  return value.slice(0, 10) > today;
+}
+
+export async function cancelAsaasSubscription(subscriptionId: string) {
+  const normalizedId = subscriptionId.trim();
+
+  if (!normalizedId) {
+    throw new Error("Assinatura Asaas inválida para cancelamento.");
+  }
+
+  await asaasRequest<Record<string, unknown>>({
+    path: `/subscriptions/${normalizedId}`,
+    method: "DELETE"
+  });
 }
 
 export function validateAsaasWebhookRequest(request: Request) {

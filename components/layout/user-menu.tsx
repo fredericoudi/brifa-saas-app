@@ -47,7 +47,7 @@ export function UserMenu({
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        className="inline-flex h-11 items-center gap-2 rounded-full border border-border bg-panel px-3 text-sm text-text shadow-[0_8px_24px_-20px_rgba(15,23,42,0.3)] transition hover:bg-panelAlt/80"
+        className="inline-flex h-11 items-center gap-2 rounded-full border border-border/80 bg-panel px-2.5 text-sm text-text shadow-[0_8px_24px_-20px_rgba(15,23,42,0.3)] transition hover:bg-panelAlt/80 lg:h-[54px] lg:gap-3 lg:px-3"
         onClick={() => setOpen((prev) => !prev)}
         aria-label="Menu do usuário"
       >
@@ -55,14 +55,18 @@ export function UserMenu({
           name={profileName}
           avatarUrl={profileAvatarUrl}
           updatedAt={profileUpdatedAt}
-          className="h-7 w-7 border-border/80 bg-brandMuted text-brand"
-          fallbackClassName="text-[10px]"
+          className="h-8 w-8 border-border/80 bg-brandMuted text-brand lg:h-10 lg:w-10"
+          fallbackClassName="text-[10px] lg:text-xs"
         />
+        <div className="hidden min-w-0 text-left lg:block">
+          <p className="truncate text-sm font-semibold leading-none text-text">{profileName}</p>
+          <p className="mt-1 truncate text-xs text-muted">{roleLabel}</p>
+        </div>
         <ChevronDown className={cn("h-4 w-4 transition", open ? "rotate-180" : "rotate-0")} />
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-14 z-50 w-60 rounded-[24px] border border-border bg-panel p-2.5 shadow-panel">
+        <div className="absolute right-0 top-14 z-50 w-64 rounded-[24px] border border-border bg-panel p-2.5 shadow-panel">
           <div className="flex items-center gap-3 border-b border-border/80 px-3 pb-3">
             <UserAvatar
               name={profileName}

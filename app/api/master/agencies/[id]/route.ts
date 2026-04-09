@@ -103,7 +103,8 @@ export async function PATCH(request: Request, { params }: { params: { id: string
         name: parsed.data.name,
         slug: normalizedSlug,
         plan: parsed.data.plan === "growth" ? "growth" : (parsed.data.plan as Agency["plan"]),
-        status: resolveAgencyOperationalStatus(parsed.data.status)
+        status: resolveAgencyOperationalStatus(parsed.data.status),
+        trial_activated: agency.trial_activated || parsed.data.status === "trial"
       })
       .eq("id", params.id)
       .select("*")

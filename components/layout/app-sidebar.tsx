@@ -3,9 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
-import iconeBrifa from "@/images/icone_brifa.svg";
-import logoBrifa from "@/images/logo_brifa.svg";
-import { AgencyMark } from "@/components/layout/agency-mark";
+import iconeBrifa from "@/images/icone_brifa.webp";
+import logoBrifa from "@/images/logo_brifa.webp";
 import { cn } from "@/lib/utils";
 import { SidebarModeControl, type SidebarMode } from "@/components/layout/sidebar-mode-control";
 
@@ -32,7 +31,7 @@ function SidebarNav({
       .sort((a, b) => b.href.length - a.href.length)[0]?.href ?? "";
 
   return (
-    <nav className="space-y-1.5 p-2">
+    <nav className={cn("space-y-1.5 py-6", expanded ? "px-4" : "px-2")}>
       {navItems.map((item) => {
         const Icon = item.icon;
         const isActive = item.href === activeHref;
@@ -44,14 +43,20 @@ function SidebarNav({
             title={item.label}
             onClick={onNavigate}
             className={cn(
-              "flex h-12 items-center rounded-[18px] text-base font-medium transition",
-              expanded ? "gap-3 px-3.5" : "justify-center px-0",
+              "group relative flex h-[52px] items-center rounded-[18px] text-[15px] font-medium transition",
+              expanded ? "gap-3 px-4" : "justify-center px-0",
               isActive
-                ? "bg-brand text-white shadow-[0_16px_28px_-22px_hsl(var(--brand)/0.95)]"
-                : "text-muted hover:bg-panelAlt/90 hover:text-text"
+                ? "bg-brandMuted/45 text-brand"
+                : "text-muted hover:bg-panelAlt/80 hover:text-text"
             )}
           >
-            <Icon className="h-6 w-6" />
+            <span
+              className={cn(
+                "absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full transition",
+                isActive ? "bg-brand" : "bg-transparent group-hover:bg-brand/20"
+              )}
+            />
+            <Icon className="h-[18px] w-[18px]" />
             {expanded ? <span className="truncate">{item.label}</span> : null}
           </Link>
         );
@@ -65,8 +70,6 @@ export function AppSidebar({
   pathname,
   dashboardHref,
   agencyName,
-  agencyLogoUrl,
-  agencyUpdatedAt,
   mode,
   onModeChange,
   desktopExpanded,
@@ -80,8 +83,6 @@ export function AppSidebar({
   pathname: string;
   dashboardHref: string;
   agencyName: string;
-  agencyLogoUrl: string | null;
-  agencyUpdatedAt?: string;
   mode: SidebarMode;
   onModeChange: (mode: SidebarMode) => void;
   desktopExpanded: boolean;
@@ -104,7 +105,7 @@ export function AppSidebar({
 
       <aside
         className={cn(
-          "fixed bottom-3 left-3 top-3 z-50 w-[18rem] rounded-[30px] border border-border/80 bg-panel/95 shadow-panel backdrop-blur-xl transition-transform duration-200 lg:hidden",
+          "fixed inset-y-0 left-0 z-50 w-[19.5rem] border-r border-border/80 bg-panel shadow-panel transition-transform duration-200 lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -112,57 +113,35 @@ export function AppSidebar({
           <Link
             href={dashboardHref}
             onClick={onMobileClose}
-            className="flex items-center gap-3 border-b border-border/80 px-5 py-5"
+            className="flex h-[84px] items-center gap-3 border-b border-border/80 px-6"
+            aria-label={`Abrir dashboard de ${agencyName}`}
+            title={agencyName}
           >
-            <AgencyMark
-              agencyName={agencyName}
-              logoUrl={agencyLogoUrl}
-              updatedAt={agencyUpdatedAt}
-              className="h-12 w-12 rounded-2xl border border-border/80 bg-panelAlt shadow-soft"
-              fallbackClassName="text-base font-semibold"
-            />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-text">{agencyName}</p>
-              <p className="text-xs text-muted">Identidade da agência</p>
-            </div>
+            <Image src={logoBrifa} alt="Brifa" priority className="h-auto w-[94px]" />
           </Link>
           <SidebarNav navItems={navItems} pathname={pathname} expanded={true} onNavigate={onMobileClose} />
-          <div className="mt-auto border-t border-border/80 p-3">
+          <div className="mt-auto border-t border-border/80 bg-panelAlt/55 p-3">
             <SidebarModeControl mode={mode} onChange={onModeChange} compact={false} />
           </div>
         </div>
       </aside>
 
       <aside
-        className="fixed bottom-4 left-4 top-4 z-30 hidden overflow-visible rounded-[32px] border border-border/80 bg-panel/92 shadow-panel backdrop-blur-xl transition-[width] duration-200 lg:flex lg:flex-col"
+        className="fixed inset-y-0 left-0 z-30 hidden overflow-visible border-r border-border/80 bg-panel transition-[width] duration-200 lg:flex lg:flex-col"
         style={{ width: desktopWidth }}
         onMouseEnter={mode === "hover" ? onHoverStart : undefined}
         onMouseLeave={mode === "hover" ? onHoverEnd : undefined}
       >
-        <div className="border-b border-border/70 px-4 py-5">
+        <div className={cn("flex h-[84px] border-b border-border/80 px-5", desktopExpanded ? "items-center" : "items-center justify-center")}>
           {desktopExpanded ? (
-            <div className="flex h-[26px] items-center">
-              <Image
-                src={logoBrifa}
-                alt="Brifa"
-                priority
-                className="h-auto w-[80px]"
-              />
-            </div>
+            <Image src={logoBrifa} alt="Brifa" priority className="h-auto w-[94px]" />
           ) : (
-            <div className="flex justify-center">
-              <Image
-                src={iconeBrifa}
-                alt="Brifa"
-                priority
-                className="h-7 w-7"
-              />
-            </div>
+            <Image src={iconeBrifa} alt="Brifa" priority className="h-8 w-8" />
           )}
         </div>
 
         <SidebarNav navItems={navItems} pathname={pathname} expanded={desktopExpanded} />
-        <div className="mt-auto border-t border-border/80 p-3">
+        <div className="mt-auto border-t border-border/80 bg-panelAlt/55 p-3">
           <SidebarModeControl mode={mode} onChange={onModeChange} compact={!desktopExpanded} />
         </div>
       </aside>

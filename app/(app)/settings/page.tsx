@@ -9,12 +9,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { LoadingBlock } from "@/components/ui/loading";
 import { UserAvatar } from "@/components/ui/user-avatar";
-import {
-  AGENCY_BRAND_EVENT,
-  DEFAULT_BRAND_HEX,
-  getAgencyBrandTheme,
-  normalizeHexColor
-} from "@/lib/agency-branding";
+import { AGENCY_BRAND_EVENT } from "@/lib/agency-branding";
 import {
   COMMERCIAL_STATUS_LABEL,
   COMMERCIAL_STATUS_VARIANT,
@@ -38,6 +33,7 @@ export default function SettingsPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingAgency, setSavingAgency] = useState(false);
   const [savingDrive, setSavingDrive] = useState(false);
+  const [cancelingSubscription, setCancelingSubscription] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -50,18 +46,20 @@ export default function SettingsPage() {
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [agencyName, setAgencyName] = useState("");
   const [agencyLogoUrl, setAgencyLogoUrl] = useState<string | null>(null);
-  const [brandColor, setBrandColor] = useState(DEFAULT_BRAND_HEX);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [rootFolderId, setRootFolderId] = useState("");
   const [showUpgradeHint, setShowUpgradeHint] = useState(false);
 
   const isAdmin = useMemo(() => profile?.role === "admin", [profile?.role]);
-  const resolvedBrandColor = useMemo(() => normalizeHexColor(brandColor) ?? DEFAULT_BRAND_HEX, [brandColor]);
-  const brandTheme = useMemo(() => getAgencyBrandTheme(brandColor), [brandColor]);
   const displayedLogoUrl = logoPreviewUrl ?? agencyLogoUrl;
   const displayedAvatarUrl = avatarPreviewUrl ?? avatarUrl;
   const googleDrivePermission = commercialContext?.permissions.google_drive ?? { allowed: true, message: null };
+  const canCancelSubscription =
+    isAdmin &&
+    commercialContext?.subscription.payment_provider === "asaas" &&
+    !!commercialContext.subscription.external_subscription_id &&
+    commercialContext.subscription.status !== "canceled";
 
   async function loadData() {
     setError("");
@@ -113,7 +111,6 @@ export default function SettingsPage() {
       setAvatarFile(null);
       setAgencyName(typedAgency.name);
       setAgencyLogoUrl(typedAgency.logo_url ?? null);
-      setBrandColor(typedAgency.brand_color ?? DEFAULT_BRAND_HEX);
       setLogoFile(null);
 
       const commercialResponse = await fetch("/api/subscription/context", {
@@ -264,13 +261,6 @@ export default function SettingsPage() {
     if (!agency || !isAdmin) return;
 
     try {
-      const normalizedBrandColor = normalizeHexColor(brandColor);
-
-      if (!normalizedBrandColor) {
-        setError("Informe uma cor hexadecimal válida. Ex.: #F97316.");
-        return;
-      }
-
       setSavingAgency(true);
       setError("");
       setSuccess("");
@@ -301,8 +291,7 @@ export default function SettingsPage() {
       const { data: updatedAgency, error: updateError } = await supabaseAgencyUpdate
         .update({
           name: agencyName,
-          logo_url: nextLogoUrl,
-          brand_color: normalizedBrandColor
+          logo_url: nextLogoUrl
         })
         .eq("id", agency.id)
         .select("*")
@@ -314,7 +303,6 @@ export default function SettingsPage() {
       setAgency(typedUpdatedAgency);
       setAgencyName(typedUpdatedAgency.name);
       setAgencyLogoUrl(typedUpdatedAgency.logo_url ?? null);
-      setBrandColor(typedUpdatedAgency.brand_color ?? DEFAULT_BRAND_HEX);
       setLogoFile(null);
 
       window.dispatchEvent(
@@ -369,6 +357,48 @@ export default function SettingsPage() {
 
   function connectGoogleDrive() {
     window.location.href = "/api/integrations/google-drive/connect";
+  }
+
+  async function handleCancelSubscription() {
+    if (!canCancelSubscription) return;
+
+    const confirmed = window.confirm(
+      "Tem certeza que deseja cancelar a assinatura da agência? O painel continuará acessível em modo de visualização, mas novas ações operacionais ficarão bloqueadas."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setCancelingSubscription(true);
+      setError("");
+      setSuccess("");
+
+      const response = await fetch("/api/subscription/cancel", {
+        method: "POST"
+      });
+
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+        context?: AgencyCommercialContext;
+        alreadyCanceled?: boolean;
+      } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Não foi possível cancelar a assinatura da agência.");
+      }
+
+      if (payload?.context) {
+        setCommercialContext(payload.context);
+      }
+
+      setSuccess(payload?.alreadyCanceled ? "A assinatura já estava cancelada." : "Assinatura cancelada com sucesso.");
+    } catch (cancelError) {
+      setError(cancelError instanceof Error ? cancelError.message : "Não foi possível cancelar a assinatura da agência.");
+    } finally {
+      setCancelingSubscription(false);
+    }
   }
 
   async function validateSquareLogo(file: File) {
@@ -490,20 +520,25 @@ export default function SettingsPage() {
 
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted">Arquivo da foto</label>
-                <label className="flex min-h-[112px] cursor-pointer flex-col justify-center rounded-2xl border border-dashed border-border bg-panelAlt/35 px-4 py-3 text-left transition hover:border-brand hover:bg-brand/5">
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                    onChange={handleAvatarSelection}
-                    className="hidden"
-                  />
-                  <span className="text-sm font-medium text-text">
-                    {avatarFile ? "Trocar foto selecionada" : avatarUrl ? "Trocar foto do perfil" : "Selecionar foto do perfil"}
-                  </span>
-                  <span className="mt-1 text-xs text-muted">
+                <div className="rounded-2xl border border-border bg-panelAlt/35 px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="inline-flex cursor-pointer items-center rounded-[20px] border border-border bg-panel px-4 py-2 text-sm font-medium text-text transition hover:border-brand hover:text-brand">
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                        onChange={handleAvatarSelection}
+                        className="hidden"
+                      />
+                      {avatarFile ? "Trocar foto selecionada" : avatarUrl ? "Trocar foto do perfil" : "Selecionar foto do perfil"}
+                    </label>
+                    <span className="min-w-0 truncate text-xs text-muted">
+                      {avatarFile ? avatarFile.name : avatarUrl ? "Foto atual do perfil" : "Nenhuma foto enviada"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-muted">
                     A foto será usada na equipe, no Kanban e em pontos de identificação do app.
-                  </span>
-                </label>
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -601,77 +636,35 @@ export default function SettingsPage() {
 
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted">Arquivo do logo</label>
-                <label className="flex min-h-[112px] cursor-pointer flex-col justify-center rounded-2xl border border-dashed border-border bg-panelAlt/35 px-4 py-3 text-left transition hover:border-brand hover:bg-brand/5">
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                    onChange={handleLogoSelection}
-                    disabled={!isAdmin}
-                    className="hidden"
-                  />
-                  <span className="text-sm font-medium text-text">
-                    {logoFile ? "Trocar imagem selecionada" : agencyLogoUrl ? "Trocar logo da agência" : "Selecionar logo da agência"}
-                  </span>
-                  <span className="mt-1 text-xs text-muted">
+                <div className="rounded-2xl border border-border bg-panelAlt/35 px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label
+                      className={
+                        "inline-flex items-center rounded-[20px] border px-4 py-2 text-sm font-medium transition " +
+                        (isAdmin
+                          ? "cursor-pointer border-border bg-panel text-text hover:border-brand hover:text-brand"
+                          : "cursor-not-allowed border-border bg-panelAlt/50 text-muted")
+                      }
+                    >
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                        onChange={handleLogoSelection}
+                        disabled={!isAdmin}
+                        className="hidden"
+                      />
+                      {logoFile ? "Trocar imagem selecionada" : agencyLogoUrl ? "Trocar logo da agência" : "Selecionar logo da agência"}
+                    </label>
+                    <span className="min-w-0 truncate text-xs text-muted">
+                      {logoFile ? logoFile.name : agencyLogoUrl ? "Logo atual da agência" : "Nenhum logo enviado"}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-muted">
                     {isAdmin
                       ? "Envie um logo quadrado para funcionar bem no topo e na sidebar."
                       : "Somente administradores podem alterar o logo da agência."}
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            <div className="md:col-span-2 grid gap-4 lg:grid-cols-[220px_1fr]">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted">Cor principal</label>
-                <div className="rounded-2xl border border-border bg-panelAlt/50 p-4">
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="color"
-                      value={resolvedBrandColor}
-                      onChange={(event) => setBrandColor(event.target.value.toUpperCase())}
-                      disabled={!isAdmin}
-                      className="h-12 w-12 cursor-pointer rounded-xl border border-border bg-panel p-1 disabled:cursor-not-allowed"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-text">{resolvedBrandColor}</p>
-                      <p className="mt-1 text-xs text-muted">
-                        A cor principal substitui o roxo atual nos destaques e ações do aplicativo.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl border border-border p-3">
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted">Tom principal</p>
-                      <div
-                        className="mt-2 h-10 rounded-lg border border-border"
-                        style={{ backgroundColor: `hsl(${brandTheme.brandCss})` }}
-                      />
-                    </div>
-                    <div className="rounded-xl border border-border p-3">
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted">Tom suave do fundo</p>
-                      <div
-                        className="mt-2 h-10 rounded-lg border border-border"
-                        style={{ backgroundColor: `hsl(${brandTheme.brandMutedCss})` }}
-                      />
-                    </div>
-                  </div>
+                  </p>
                 </div>
-              </div>
-
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted">Hexadecimal</label>
-                <Input
-                  value={brandColor}
-                  onChange={(event) => setBrandColor(event.target.value)}
-                  placeholder="#F97316"
-                  disabled={!isAdmin}
-                  maxLength={7}
-                />
-                <p className="mt-1 text-xs text-muted">
-                  Digite a cor principal da agência. Exemplo: <span className="font-medium">{DEFAULT_BRAND_HEX}</span>.
-                </p>
               </div>
             </div>
 
@@ -789,11 +782,38 @@ export default function SettingsPage() {
                 <Button type="button" variant="secondary" onClick={() => setShowUpgradeHint((current) => !current)}>
                   Solicitar upgrade
                 </Button>
+                {canCancelSubscription ? (
+                  <Button type="button" variant="danger" onClick={handleCancelSubscription} disabled={cancelingSubscription}>
+                    {cancelingSubscription ? "Cancelando assinatura..." : "Cancelar assinatura"}
+                  </Button>
+                ) : null}
                 {showUpgradeHint ? (
                   <p className="text-sm text-muted">
                     Entre em contato com o comercial ou com o super admin da plataforma para alterar o plano da agência.
                   </p>
                 ) : null}
+              </div>
+
+              <div className="rounded-xl border border-border bg-panelAlt/35 p-4">
+                <p className="text-sm font-medium text-text">Gerenciar assinatura</p>
+                <p className="mt-2 text-sm text-muted">
+                  Se você cancelar a assinatura, o BRIFA mantém a agência acessível em modo de visualização. Criação e edição de jobs,
+                  tarefas e demais ações comerciais ficam bloqueadas até a reativação.
+                </p>
+                {!isAdmin ? (
+                  <p className="mt-3 text-xs text-muted">Somente administradores podem cancelar a assinatura da agência.</p>
+                ) : commercialContext.subscription.status === "canceled" ? (
+                  <p className="mt-3 text-xs text-muted">A assinatura já está cancelada.</p>
+                ) : commercialContext.subscription.payment_provider !== "asaas" ||
+                  !commercialContext.subscription.external_subscription_id ? (
+                  <p className="mt-3 text-xs text-muted">
+                    Essa assinatura ainda não está vinculada a um contrato cancelável pelo painel. Se precisar, seguimos pelo suporte.
+                  </p>
+                ) : (
+                  <p className="mt-3 text-xs text-muted">
+                    O cancelamento é enviado para o Asaas e refletido imediatamente no painel da agência.
+                  </p>
+                )}
               </div>
             </div>
           )}
