@@ -22,6 +22,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { resolvePlatformPath } from "@/lib/agency-routing";
 import type { AgencyCommercialContext } from "@/lib/commercial";
 import type { UserProfile } from "@/lib/database.types";
+import type { AgencyNotificationItem, AgencyNotificationsResponse } from "@/lib/notifications";
 import { AGENCY_BRAND_EVENT, type AgencyBrandEventDetail, getAgencyBrandStyleVars } from "@/lib/agency-branding";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { AppSidebar } from "@/components/layout/app-sidebar";
@@ -33,22 +34,23 @@ type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  iconSrc?: string;
   adminOnly?: boolean;
 };
 
 type BaseNavItem = Omit<NavItem, "href"> & { path: string };
 
 const baseNavItems: readonly BaseNavItem[] = [
-  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/jobs", label: "Jobs", icon: Briefcase },
-  { path: "/tasks", label: "Tarefas", icon: ListTodo },
-  { path: "/jobs/kanban", label: "Kanban", icon: Kanban },
-  { path: "/archived", label: "Arquivados", icon: Archive },
-  { path: "/clients", label: "Clientes", icon: Building2 },
-  { path: "/team", label: "Equipe", icon: Users },
-  { path: "/workload", label: "Produção da Equipe", icon: BarChart3 },
+  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, iconSrc: "/icons/sidebar/dashboard.svg" },
+  { path: "/jobs", label: "Jobs", icon: Briefcase, iconSrc: "/icons/sidebar/jobs.svg" },
+  { path: "/tasks", label: "Tarefas", icon: ListTodo, iconSrc: "/icons/sidebar/tarefas.svg" },
+  { path: "/jobs/kanban", label: "Kanban", icon: Kanban, iconSrc: "/icons/sidebar/kanban.svg" },
+  { path: "/archived", label: "Arquivados", icon: Archive, iconSrc: "/icons/sidebar/arquivados.svg" },
+  { path: "/clients", label: "Clientes", icon: Building2, iconSrc: "/icons/sidebar/clientes.svg" },
+  { path: "/team", label: "Equipe", icon: Users, iconSrc: "/icons/sidebar/equipe.svg" },
+  { path: "/workload", label: "Produção da Equipe", icon: BarChart3, iconSrc: "/icons/sidebar/producao-equipe.svg" },
   { path: "/conversations", label: "Conversas", icon: MessageSquareText, adminOnly: true },
-  { path: "/settings", label: "Configurações", icon: Settings }
+  { path: "/settings", label: "Configurações", icon: Settings, iconSrc: "/icons/sidebar/configuracoes.svg" }
 ] as const;
 
 const masterNavItem: NavItem = { href: resolvePlatformPath(), label: "Painel Master", icon: ShieldCheck };
@@ -68,8 +70,8 @@ const titleMap: Record<string, string> = {
 };
 
 const SIDEBAR_MODE_STORAGE_KEY = "app.sidebar.mode";
-const SIDEBAR_EXPANDED_WIDTH = 236;
-const SIDEBAR_COLLAPSED_WIDTH = 88;
+const SIDEBAR_EXPANDED_WIDTH = 312;
+const SIDEBAR_COLLAPSED_WIDTH = 116;
 const TOPBAR_HEIGHT = 84;
 const COMMERCIAL_CONTEXT_REFRESH_EVENT = "commercial-context:refresh";
 
@@ -101,6 +103,7 @@ export function AppShell({
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const [agencyState, setAgencyState] = useState(agency);
   const [commercialContext, setCommercialContext] = useState<AgencyCommercialContext | null>(null);
+  const [notifications, setNotifications] = useState<AgencyNotificationItem[]>([]);
   const [trialExpiredModalOpen, setTrialExpiredModalOpen] = useState(false);
 
   const pageTitle = useMemo(() => {
@@ -117,7 +120,8 @@ export function AppShell({
     ).map((item) => ({
       href: `${agency.appBasePath}${item.path}`,
       label: item.label,
-      icon: item.icon
+      icon: item.icon,
+      iconSrc: item.iconSrc
     }));
 
     if (profile.platform_role === "super_admin") {
@@ -236,6 +240,64 @@ export function AppShell({
   }, [profile.agency_id]);
 
   useEffect(() => {
+    let active = true;
+    let controller: AbortController | null = null;
+
+    async function loadNotifications() {
+      if (controller) {
+        controller.abort();
+      }
+      controller = new AbortController();
+
+      try {
+        const response = await fetch("/api/notifications", {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          if (active) {
+            setNotifications([]);
+          }
+          return;
+        }
+
+        const payload = (await response.json()) as AgencyNotificationsResponse;
+        const nextNotifications = (payload.notifications ?? []).map((item) => ({
+          ...item,
+          path: `${agency.appBasePath}${item.path.startsWith("/") ? item.path : `/${item.path}`}`
+        }));
+
+        if (active) {
+          setNotifications(nextNotifications);
+        }
+      } catch (error) {
+        if (!active) return;
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setNotifications([]);
+      }
+    }
+
+    const handleFocus = () => {
+      void loadNotifications();
+    };
+
+    void loadNotifications();
+    const intervalId = window.setInterval(() => {
+      void loadNotifications();
+    }, 60000);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      active = false;
+      controller?.abort();
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [agency.appBasePath, pathname, profile.agency_id, profile.id, profile.platform_role, profile.role]);
+
+  useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
 
@@ -303,8 +365,8 @@ export function AppShell({
         agencyHref={`${agency.appBasePath}/settings#agencia`}
         canCreateJob={canCreateJob}
         newJobHref={jobsHref}
-        alertsHref={settingsHref}
-        notificationCount={trialBanner ? 1 : 0}
+        notifications={notifications}
+        notificationsReadStateKey={`${profile.agency_id}:${profile.id}`}
         signingOut={signingOut}
         onSignOut={handleSignOut}
         onMobileMenuToggle={() => setMobileOpen((prev) => !prev)}

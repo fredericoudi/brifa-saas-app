@@ -1,21 +1,14 @@
 import Link from "next/link";
-import {
-  AlarmClock,
-  ArrowRight,
-  CalendarDays,
-  LayoutGrid,
-  MessageSquareText,
-  Star,
-  Zap
-} from "lucide-react";
+import { ArrowRight, CalendarDays } from "lucide-react";
 import { TrialActivationCard } from "@/components/commercial/trial-activation-card";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { requireAuth } from "@/lib/auth";
 import { getAgencyCommercialContext } from "@/lib/commercial";
 import { isMissingJobsArchivedAtColumn } from "@/lib/jobs-archive";
+import { getTaskChecklistProgress, getTaskProgressPercent, normalizeTaskChecklistItems } from "@/lib/task-checklist";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { cn, formatDate, JOB_STATUS_LABEL, TASK_STATUS_LABEL, toPercent } from "@/lib/utils";
+import { cn, formatDate, getStatusBadgeVariant, JOB_STATUS_LABEL, TASK_STATUS_LABEL, toPercent } from "@/lib/utils";
 
 type DashboardJob = {
   id: string;
@@ -31,11 +24,15 @@ type DashboardJob = {
 
 type DashboardTask = {
   id: string;
+  job_id: string;
   title: string;
   status: string;
   due_date: string | null;
   due_time: string | null;
+  assigned_to: string | null;
   estimated_hours: number;
+  checklist_items?: unknown;
+  created_at: string;
 };
 
 type DashboardUser = {
@@ -60,37 +57,29 @@ function parseDueTimestamp(dueDate: string | null, dueTime?: string | null) {
   return new Date(`${dueDate}T${timePart}:00`).getTime();
 }
 
-function resolveTaskBadgeVariant(status: string): "neutral" | "brand" | "warning" | "success" {
-  if (status === "concluido") return "success";
-  if (status === "em_andamento") return "brand";
-  if (status === "revisao") return "warning";
-  return "neutral";
+function resolveDeadlineProgress(job: DashboardJob) {
+  if (job.status === "finalizado") return 100;
+  if (!job.due_date) return 0;
+
+  const now = Date.now();
+  const end = parseDueTimestamp(job.due_date, job.due_time);
+  if (!Number.isFinite(end)) return 0;
+
+  const start = job.created_at ? new Date(job.created_at).getTime() : now;
+  const totalWindow = Math.max(end - start, 1);
+  const elapsed = now - start;
+  const progress = (elapsed / totalWindow) * 100;
+
+  return Math.max(0, Math.min(100, Math.round(progress)));
 }
 
-function resolveJobBadgeVariant(status: string): "neutral" | "brand" | "warning" | "success" {
-  if (status === "finalizado") return "success";
-  if (status === "aprovado") return "brand";
-  if (status === "revisao") return "warning";
-  return "neutral";
+function getStatusLabel(status: string) {
+  return JOB_STATUS_LABEL[status] ?? TASK_STATUS_LABEL[status] ?? status;
 }
 
-function resolveTaskProgress(status: string) {
-  switch (status) {
-    case "briefing":
-      return 36;
-    case "criacao":
-      return 54;
-    case "em_andamento":
-      return 68;
-    case "revisao":
-      return 79;
-    case "aprovado":
-      return 92;
-    case "concluido":
-      return 100;
-    default:
-      return 24;
-  }
+function isMissingTaskChecklistItemsColumn(errorMessage: string) {
+  const normalized = errorMessage.toLowerCase();
+  return normalized.includes("checklist_items") && normalized.includes("tasks") && normalized.includes("schema cache");
 }
 
 function buildMonthlyClientSeries(clients: DashboardClient[]) {
@@ -123,14 +112,16 @@ function buildMonthlyClientSeries(clients: DashboardClient[]) {
 function DashboardMetricCard({
   value,
   label,
-  icon: Icon
+  iconSrc,
+  iconAlt
 }: {
   value: number | string;
   label: string;
-  icon: typeof Star;
+  iconSrc: string;
+  iconAlt: string;
 }) {
   return (
-    <Card className="h-full rounded-[28px]">
+    <Card className="h-full rounded-[28px] border-0 shadow-[0_18px_34px_-28px_rgba(15,23,42,0.42)]">
       <CardContent className="flex min-h-[150px] flex-col justify-between p-6">
         <div>
           <p className="text-[3.15rem] font-semibold leading-none tracking-[-0.04em] text-text">{value}</p>
@@ -138,9 +129,7 @@ function DashboardMetricCard({
         </div>
 
         <div className="flex justify-end">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brandMuted text-brand">
-            <Icon className="h-5 w-5" />
-          </div>
+          <img src={iconSrc} alt={iconAlt} width={40} height={40} className="h-10 w-10 object-contain" />
         </div>
       </CardContent>
     </Card>
@@ -161,8 +150,8 @@ function TeamLoadCard({
   const lead = highlightedLoad[0] ?? null;
 
   return (
-    <Card className="min-h-[308px] rounded-[28px]">
-      <CardHeader className="border-b-0 pb-0">
+    <Card className="min-h-[308px] rounded-[28px] border-0 shadow-[0_18px_34px_-28px_rgba(15,23,42,0.42)]">
+      <CardHeader className="relative z-10 border-b-0 bg-panel shadow-[0_10px_14px_-14px_rgba(15,23,42,0.34)]">
         <h2 className="text-[1.35rem] font-semibold tracking-tight text-text">Carga da Equipe</h2>
       </CardHeader>
       <CardContent className="pt-4">
@@ -264,8 +253,8 @@ function NewClientsCard({
   const currentMonthTotal = clientsByMonth.at(-1)?.total ?? 0;
 
   return (
-    <Card className="min-h-[308px] rounded-[28px]">
-      <CardHeader className="border-b-0 pb-0">
+    <Card className="min-h-[308px] rounded-[28px] border-0 shadow-[0_18px_34px_-28px_rgba(15,23,42,0.42)]">
+      <CardHeader className="relative z-10 border-b-0 bg-panel shadow-[0_10px_14px_-14px_rgba(15,23,42,0.34)]">
         <h2 className="text-[1.35rem] font-semibold tracking-tight text-text">Novos Clientes</h2>
       </CardHeader>
       <CardContent className="pt-5">
@@ -291,33 +280,32 @@ function NewClientsCard({
   );
 }
 
-function StageDots({ filled }: { filled: number }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      {Array.from({ length: 4 }).map((_, index) => (
-        <span
-          key={index}
-          className={cn(
-            "h-3.5 w-3.5 rounded-full border border-[#d8deec]",
-            index < filled ? "bg-[#c8cfdd]" : "bg-transparent"
-          )}
-        />
-      ))}
-    </div>
-  );
-}
+type DashboardTaskCardItem = {
+  id: string;
+  jobCode: string;
+  jobTitle: string;
+  clientName: string | null;
+  status: string;
+  createdAt: string | null;
+  dueDate: string | null;
+  dueTime: string | null;
+  assigneeNames: string[];
+  checklistTotal: number;
+  checklistCompleted: number;
+  progressPercent: number;
+};
 
 function DashboardTasksCard({
   tasks
 }: {
-  tasks: DashboardTask[];
+  tasks: DashboardTaskCardItem[];
 }) {
   const remaining = Math.max(tasks.length - 3, 0);
   const preview = tasks.slice(0, 3);
 
   return (
-    <Card className="overflow-hidden rounded-[28px]">
-      <CardHeader>
+    <Card className="overflow-hidden rounded-[28px] border-0 shadow-[0_18px_34px_-28px_rgba(15,23,42,0.42)]">
+      <CardHeader className="relative z-10 border-b-0 bg-panel shadow-[0_10px_14px_-14px_rgba(15,23,42,0.34)]">
         <h2 className="text-[1.35rem] font-semibold tracking-tight text-text">Tarefas</h2>
       </CardHeader>
       <CardContent className="space-y-0 px-0 py-0">
@@ -325,33 +313,67 @@ function DashboardTasksCard({
           <p className="px-6 py-6 text-sm text-muted">Nenhuma tarefa em andamento.</p>
         ) : (
           preview.map((task, index) => {
-            const progress = resolveTaskProgress(task.status);
-
             return (
-              <div key={task.id} className={cn("space-y-3 px-6 py-5", index > 0 ? "border-t border-border/80" : "")}>
-                <Badge variant={resolveTaskBadgeVariant(task.status)} className="border-0 px-3 py-1 text-[11px] font-semibold">
-                  {TASK_STATUS_LABEL[task.status] ?? task.status}
-                </Badge>
-                <p className="text-sm font-semibold text-text">{task.title}</p>
-
-                <div className="flex items-center gap-3">
-                  <StageDots filled={Math.max(1, Math.ceil(progress / 25))} />
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-muted">
-                      <span>Progresso</span>
-                      <span>{progress}%</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-[#e4e9f5]">
-                      <div className="h-full rounded-full bg-brand" style={{ width: `${progress}%` }} />
-                    </div>
+              <div key={task.id} className={cn("space-y-3 px-6 py-5", index > 0 ? "border-t border-[#ececec]" : "")}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-semibold text-brand">{task.jobCode}</p>
+                    <p className="text-sm font-semibold text-text">{task.jobTitle}</p>
                   </div>
+                  <Badge
+                    variant={getStatusBadgeVariant(task.status)}
+                    className="border-0 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.05em]"
+                  >
+                    {getStatusLabel(task.status)}
+                  </Badge>
+                </div>
+
+                <div className="space-y-1 text-xs text-muted">
+                  <p>
+                    Cliente: <span className="font-medium text-text">{task.clientName ?? "-"}</span>
+                  </p>
+                  <p className="truncate">
+                    Responsável:{" "}
+                    <span className="font-medium text-text">
+                      {task.assigneeNames.length > 0 ? task.assigneeNames.join(", ") : "-"}
+                    </span>
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px] text-muted">
+                    <p>Progresso</p>
+                    <p className="font-semibold text-text">{task.progressPercent}%</p>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-[#dadada]">
+                    <span
+                      className="block h-2 rounded-full bg-brand transition-all duration-200"
+                      style={{ width: `${task.progressPercent}%` }}
+                    />
+                  </div>
+                  {task.checklistTotal > 0 ? (
+                    <p className="text-[11px] text-muted">
+                      {task.checklistCompleted}/{task.checklistTotal} itens concluídos
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="flex items-center justify-between gap-2 text-xs text-muted">
+                  <div className="flex items-center gap-1.5">
+                    <CalendarDays className="h-3.5 w-3.5" />
+                    <span>Criado em {formatDate(task.createdAt)}</span>
+                  </div>
+                  <span className="font-semibold text-text">
+                    {formatDate(task.dueDate)}
+                    {task.dueTime ? ` • ${task.dueTime.slice(0, 5)}` : ""}
+                  </span>
                 </div>
               </div>
             );
           })
         )}
 
-        <div className="border-t border-border/80 px-6 py-5">
+        <div className="border-t border-[#ececec] px-6 py-5">
           <Link
             href="tasks"
             className="inline-flex h-12 w-full items-center justify-center rounded-[18px] bg-brandMuted font-semibold text-brand transition hover:brightness-[0.98]"
@@ -364,6 +386,35 @@ function DashboardTasksCard({
   );
 }
 
+function DeadlineProgressRing({ progress }: { progress: number }) {
+  const size = 62;
+  const strokeBase = 2;
+  const strokeProgress = 5;
+  const radius = (size - strokeProgress) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progressLength = (circumference * progress) / 100;
+
+  return (
+    <div className="relative inline-flex h-[62px] w-[62px] items-center justify-center">
+      <svg viewBox={`0 0 ${size} ${size}`} className="h-[62px] w-[62px]">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#cfcfcf" strokeWidth={strokeBase} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="hsl(var(--brand))"
+          strokeWidth={strokeProgress}
+          strokeLinecap="round"
+          strokeDasharray={`${progressLength} ${circumference - progressLength}`}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </svg>
+      <img src="/icons/dashboard/energy-1.svg" alt="" width={24} height={24} className="absolute h-6 w-6 object-contain" />
+    </div>
+  );
+}
+
 function DashboardJobsCard({
   jobs
 }: {
@@ -373,8 +424,8 @@ function DashboardJobsCard({
   const preview = jobs.slice(0, 3);
 
   return (
-    <Card className="overflow-hidden rounded-[28px]">
-      <CardHeader>
+    <Card className="overflow-hidden rounded-[28px] border-0 shadow-[0_18px_34px_-28px_rgba(15,23,42,0.42)]">
+      <CardHeader className="relative z-10 border-b-0 bg-panel shadow-[0_10px_14px_-14px_rgba(15,23,42,0.34)]">
         <h2 className="text-[1.35rem] font-semibold tracking-tight text-text">Jobs em Andamento</h2>
       </CardHeader>
       <CardContent className="space-y-0 px-0 py-0">
@@ -382,7 +433,7 @@ function DashboardJobsCard({
           <p className="px-6 py-6 text-sm text-muted">Nenhum job ativo no momento.</p>
         ) : (
           preview.map((job, index) => (
-            <div key={job.id} className={cn("space-y-3 px-6 py-5", index > 0 ? "border-t border-border/80" : "")}>
+            <div key={job.id} className={cn("space-y-3 px-6 py-5", index > 0 ? "border-t border-[#ececec]" : "")}>
               <div className="space-y-1">
                 <p className="text-[11px] font-semibold text-brand">{job.client?.name ?? "Cliente não informado"}</p>
                 <p className="text-sm font-semibold text-text">{job.title}</p>
@@ -395,9 +446,7 @@ function DashboardJobsCard({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-brandMuted text-brand">
-                    <Zap className="h-3.5 w-3.5" />
-                  </span>
+                  <DeadlineProgressRing progress={resolveDeadlineProgress(job)} />
                   <div className="space-y-0.5">
                     <p className="text-[11px] uppercase tracking-[0.14em] text-muted">Deadline</p>
                     <p className="text-sm font-semibold text-text">
@@ -409,7 +458,7 @@ function DashboardJobsCard({
               </div>
 
               <div className="flex items-center justify-between gap-3">
-                <Badge variant={resolveJobBadgeVariant(job.status)} className="border-0 px-3 py-1 text-[11px] font-semibold">
+                <Badge variant={getStatusBadgeVariant(job.status)} className="border-0 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.05em]">
                   {JOB_STATUS_LABEL[job.status] ?? job.status}
                 </Badge>
                 <span className="text-xs text-muted">{job.job_code}</span>
@@ -418,7 +467,7 @@ function DashboardJobsCard({
           ))
         )}
 
-        <div className="border-t border-border/80 px-6 py-5">
+        <div className="border-t border-[#ececec] px-6 py-5">
           <Link
             href="jobs"
             className="inline-flex h-12 w-full items-center justify-center rounded-[18px] bg-brandMuted font-semibold text-brand transition hover:brightness-[0.98]"
@@ -457,11 +506,23 @@ export default async function DashboardPage() {
     throw new Error(jobsResponse.error.message);
   }
 
-  const [{ data: rawTasks }, { data: rawUsers }, { data: rawTaskAssignments }, { data: rawClients }] = await Promise.all([
-    supabase
+  let tasksResponse = await supabase
+    .from("tasks")
+    .select("id, job_id, title, status, due_date, due_time, assigned_to, estimated_hours, checklist_items, created_at")
+    .eq("agency_id", profile.agency_id);
+
+  if (tasksResponse.error && isMissingTaskChecklistItemsColumn(tasksResponse.error.message)) {
+    tasksResponse = await supabase
       .from("tasks")
-      .select("id, title, status, due_date, due_time, estimated_hours")
-      .eq("agency_id", profile.agency_id),
+      .select("id, job_id, title, status, due_date, due_time, assigned_to, estimated_hours, created_at")
+      .eq("agency_id", profile.agency_id);
+  }
+
+  if (tasksResponse.error) {
+    throw new Error(tasksResponse.error.message);
+  }
+
+  const [{ data: rawUsers }, { data: rawTaskAssignments }, { data: rawClients }] = await Promise.all([
     supabase
       .from("users")
       .select("id, name, weekly_capacity_hours")
@@ -475,7 +536,7 @@ export default async function DashboardPage() {
   ]);
 
   const jobs = ((jobsResponse.data as DashboardJob[] | null) ?? []).filter((job) => !job.archived_at);
-  const tasks = (rawTasks as DashboardTask[] | null) ?? [];
+  const tasks = (tasksResponse.data as DashboardTask[] | null) ?? [];
   const users = (rawUsers as DashboardUser[] | null) ?? [];
   const taskAssignments = (rawTaskAssignments as DashboardAssignment[] | null) ?? [];
   const clients = (rawClients as DashboardClient[] | null) ?? [];
@@ -522,31 +583,108 @@ export default async function DashboardPage() {
     };
   });
 
-  const highlightedLoad = [...loadByUser].sort((a, b) => b.percent - a.percent).slice(0, 4);
-  const activeTasks = [...tasks]
+  const usersById = new Map(users.map((user) => [user.id, user.name]));
+  const jobsById = new Map(jobs.map((job) => [job.id, job]));
+  const assigneesByTask = new Map<string, Set<string>>();
+
+  for (const assignment of taskAssignments) {
+    const current = assigneesByTask.get(assignment.task_id) ?? new Set<string>();
+    current.add(assignment.user_id);
+    assigneesByTask.set(assignment.task_id, current);
+  }
+
+  const taskPanelItems = tasks
     .filter((task) => task.status !== "concluido")
-    .sort((a, b) => parseDueTimestamp(a.due_date, a.due_time) - parseDueTimestamp(b.due_date, b.due_time));
+    .map((task) => {
+      const job = jobsById.get(task.job_id);
+      const checklistItems = normalizeTaskChecklistItems(task.checklist_items);
+      const checklistProgress = getTaskChecklistProgress(checklistItems);
+
+      const assigneeIds = new Set<string>(assigneesByTask.get(task.id) ?? []);
+      if (task.assigned_to) {
+        assigneeIds.add(task.assigned_to);
+      }
+
+      const assigneeNames = [...assigneeIds]
+        .map((userId) => usersById.get(userId))
+        .filter((name): name is string => Boolean(name));
+
+      return {
+        id: task.id,
+        jobCode: job?.job_code ?? "Sem código",
+        jobTitle: job?.title ?? task.title,
+        clientName: job?.client?.name ?? null,
+        status: task.status,
+        createdAt: job?.created_at ?? task.created_at,
+        dueDate: job?.due_date ?? task.due_date,
+        dueTime: job?.due_time ?? task.due_time,
+        assigneeNames,
+        assigneeIds,
+        checklistTotal: checklistProgress.total,
+        checklistCompleted: checklistProgress.completed,
+        progressPercent: getTaskProgressPercent({
+          checklistItems,
+          status: task.status
+        })
+      };
+    })
+    .filter((item) =>
+      profile.role === "admin" || profile.platform_role === "super_admin" ? true : item.assigneeIds.has(profile.id)
+    )
+    .sort((a, b) => {
+      const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bDate - aDate;
+    });
+
+  const highlightedLoad = [...loadByUser].sort((a, b) => b.percent - a.percent).slice(0, 4);
   const activeJobs = [...jobs]
     .filter((job) => job.status !== "finalizado")
     .sort((a, b) => parseDueTimestamp(a.due_date, a.due_time) - parseDueTimestamp(b.due_date, b.due_time));
   const clientsByMonth = buildMonthlyClientSeries(clients);
 
   const metrics = [
-    { label: "Jobs Ativos", value: jobsAtivos, icon: Star },
-    { label: "Jobs Atrasados", value: jobsAtrasados, icon: AlarmClock },
-    { label: "Tarefas em Andamento", value: tarefasEmAndamento, icon: LayoutGrid },
-    { label: "Tarefas Atrasadas", value: tarefasAtrasadas, icon: MessageSquareText }
+    {
+      label: "Jobs Ativos",
+      value: jobsAtivos,
+      iconSrc: "/icons/dashboard/ic-projects.svg",
+      iconAlt: "Ícone de projetos"
+    },
+    {
+      label: "Jobs Atrasados",
+      value: jobsAtrasados,
+      iconSrc: "/icons/dashboard/ic-contact.svg",
+      iconAlt: "Ícone de contato"
+    },
+    {
+      label: "Tarefas em Andamento",
+      value: tarefasEmAndamento,
+      iconSrc: "/icons/dashboard/ic-kanban.svg",
+      iconAlt: "Ícone de kanban"
+    },
+    {
+      label: "Tarefas Atrasadas",
+      value: tarefasAtrasadas,
+      iconSrc: "/icons/dashboard/ic-messages.svg",
+      iconAlt: "Ícone de mensagens"
+    }
   ] as const;
 
   return (
     <div className="space-y-5">
       {canManageTrial && !commercialContext.trial.activated ? <TrialActivationCard /> : null}
 
-      <section className="grid gap-5 2xl:grid-cols-[minmax(0,1.55fr)_350px_350px]">
-        <div className="space-y-5">
+      <section className="grid gap-5 xl:grid-cols-4">
+        <div className="space-y-5 xl:col-span-2">
           <section className="grid gap-5 sm:grid-cols-2">
             {metrics.map((metric) => (
-              <DashboardMetricCard key={metric.label} value={metric.value} label={metric.label} icon={metric.icon} />
+              <DashboardMetricCard
+                key={metric.label}
+                value={metric.value}
+                label={metric.label}
+                iconSrc={metric.iconSrc}
+                iconAlt={metric.iconAlt}
+              />
             ))}
           </section>
 
@@ -556,7 +694,7 @@ export default async function DashboardPage() {
           </section>
         </div>
 
-        <DashboardTasksCard tasks={activeTasks} />
+        <DashboardTasksCard tasks={taskPanelItems} />
         <DashboardJobsCard jobs={activeJobs} />
       </section>
 

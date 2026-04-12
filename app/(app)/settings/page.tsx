@@ -499,7 +499,7 @@ export default function SettingsPage() {
             <div className="md:col-span-2 grid gap-4 lg:grid-cols-[220px_1fr]">
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted">Foto de perfil</label>
-                <div className="rounded-2xl border border-border bg-panelAlt/50 p-4">
+                <div className="max-w-[360px] rounded-[34px] border border-border bg-panelAlt/50 p-4">
                   <div className="flex items-center gap-4">
                     <UserAvatar
                       name={name || profile?.name || "Usuário"}
@@ -520,7 +520,7 @@ export default function SettingsPage() {
 
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted">Arquivo da foto</label>
-                <div className="rounded-2xl border border-border bg-panelAlt/35 px-4 py-3">
+                <div className="max-w-[460px] rounded-[34px] border border-border bg-panelAlt/35 px-4 py-3">
                   <div className="flex flex-wrap items-center gap-3">
                     <label className="inline-flex cursor-pointer items-center rounded-[20px] border border-border bg-panel px-4 py-2 text-sm font-medium text-text transition hover:border-brand hover:text-brand">
                       <input
@@ -615,7 +615,7 @@ export default function SettingsPage() {
             <div className="md:col-span-2 grid gap-4 lg:grid-cols-[220px_1fr]">
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted">Logo / ícone</label>
-                <div className="rounded-2xl border border-border bg-panelAlt/50 p-4">
+                <div className="max-w-[360px] rounded-[34px] border border-border bg-panelAlt/50 p-4">
                   <div className="flex items-center gap-4">
                     <AgencyMark
                       agencyName={agencyName || agency?.name || "Agência"}
@@ -636,7 +636,7 @@ export default function SettingsPage() {
 
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted">Arquivo do logo</label>
-                <div className="rounded-2xl border border-border bg-panelAlt/35 px-4 py-3">
+                <div className="max-w-[460px] rounded-[34px] border border-border bg-panelAlt/35 px-4 py-3">
                   <div className="flex flex-wrap items-center gap-3">
                     <label
                       className={

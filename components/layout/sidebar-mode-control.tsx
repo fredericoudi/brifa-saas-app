@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, PanelLeft, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import Image from "next/image";
+import { Check } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -24,12 +25,6 @@ const modeOptions: Array<{ value: SidebarMode; label: string; description: strin
   }
 ];
 
-function modeIcon(mode: SidebarMode) {
-  if (mode === "expanded") return PanelLeftOpen;
-  if (mode === "collapsed") return PanelLeftClose;
-  return PanelLeft;
-}
-
 export function SidebarModeControl({
   mode,
   onChange,
@@ -41,7 +36,6 @@ export function SidebarModeControl({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const CurrentIcon = modeIcon(mode);
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
@@ -59,14 +53,16 @@ export function SidebarModeControl({
       <button
         type="button"
         className={cn(
-          "inline-flex h-11 items-center gap-2 rounded-[16px] px-3 text-xs font-medium text-muted transition hover:bg-panel hover:text-text",
-          compact ? "w-9 justify-center px-0" : "w-full justify-start"
+          "inline-flex items-center text-muted transition hover:text-text",
+          compact
+            ? "h-11 w-9 justify-center rounded-full px-0 text-xs hover:bg-panel"
+            : "h-14 w-full justify-center gap-3 rounded-[16px] border border-border/70 bg-white px-4 text-[10.5px] font-medium hover:bg-white"
         )}
         onClick={() => setOpen((prev) => !prev)}
         title="Controle da barra lateral"
         aria-label="Controle da barra lateral"
       >
-        <CurrentIcon className="h-4 w-4" />
+        <Image src="/icons/sidebar/controle-barra-lateral.svg" alt="" width={16} height={16} className="h-4 w-4 object-contain" />
         {compact ? null : <span>Controle da barra lateral</span>}
       </button>
 

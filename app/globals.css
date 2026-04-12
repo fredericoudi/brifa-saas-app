@@ -3,10 +3,10 @@
 @tailwind utilities;
 
 :root {
-  --bg: 220 30% 97%;
+  --bg: 0 0% 96%;
   --panel: 0 0% 100%;
-  --panel-alt: 220 28% 95%;
-  --border: 220 22% 88%;
+  --panel-alt: 0 0% 95%;
+  --border: 0 0% 86%;
   --text: 226 30% 16%;
   --muted: 226 14% 54%;
   --brand: 228 85% 59%;
@@ -22,8 +22,9 @@
 
 body {
   @apply bg-bg text-text antialiased;
-  font-family: var(--font-plus-jakarta), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background-image: linear-gradient(180deg, #f7f9fd 0%, #f3f6fc 100%);
+  font-family: var(--font-poppins), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background-color: #f4f4f4;
+  background-image: none;
   background-attachment: fixed;
   min-height: 100vh;
 }
@@ -37,6 +38,13 @@ input,
 select,
 textarea {
   @apply outline-none transition;
+}
+
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  border-radius: 9999px !important;
 }
 
 ::selection {

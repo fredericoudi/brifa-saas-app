@@ -21,6 +21,17 @@ const config: Config = {
         warning: "hsl(var(--warning))",
         danger: "hsl(var(--danger))"
       },
+      fontFamily: {
+        sans: [
+          "var(--font-poppins)",
+          "ui-sans-serif",
+          "system-ui",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "\"Segoe UI\"",
+          "sans-serif"
+        ]
+      },
       boxShadow: {
         panel: "0 24px 70px -46px rgba(26, 38, 73, 0.3)",
         soft: "0 12px 34px -26px rgba(26, 38, 73, 0.24)"
@@ -31,7 +42,7 @@ const config: Config = {
       },
       backgroundImage: {
         "dashboard-pattern":
-          "linear-gradient(180deg, rgba(249, 251, 255, 0.96), rgba(243, 246, 252, 0.96))"
+          "linear-gradient(180deg, rgba(244, 244, 244, 1), rgba(244, 244, 244, 1))"
       }
     }
   },

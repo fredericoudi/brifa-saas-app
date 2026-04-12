@@ -897,6 +897,61 @@ export type Database = {
           }
         ];
       };
+      job_media_files: {
+        Row: {
+          id: string;
+          agency_id: string;
+          job_id: string;
+          file_name: string;
+          storage_path: string;
+          mime_type: string | null;
+          size_bytes: number | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          agency_id: string;
+          job_id: string;
+          file_name: string;
+          storage_path: string;
+          mime_type?: string | null;
+          size_bytes?: number | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          agency_id?: string;
+          job_id?: string;
+          file_name?: string;
+          storage_path?: string;
+          mime_type?: string | null;
+          size_bytes?: number | null;
+          created_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "job_media_files_agency_id_fkey";
+            columns: ["agency_id"];
+            referencedRelation: "agencies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "job_media_files_job_id_fkey";
+            columns: ["job_id"];
+            referencedRelation: "jobs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "job_media_files_created_by_fkey";
+            columns: ["created_by"];
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       tasks: {
         Row: {
           id: string;
@@ -904,6 +959,7 @@ export type Database = {
           job_id: string;
           title: string;
           description: string | null;
+          checklist_items: Json;
           assigned_to: string | null;
           priority: Database["public"]["Enums"]["task_priority"];
           status: Database["public"]["Enums"]["task_status"];
@@ -920,6 +976,7 @@ export type Database = {
           job_id: string;
           title: string;
           description?: string | null;
+          checklist_items?: Json;
           assigned_to?: string | null;
           priority?: Database["public"]["Enums"]["task_priority"];
           status?: Database["public"]["Enums"]["task_status"];
@@ -936,6 +993,7 @@ export type Database = {
           job_id?: string;
           title?: string;
           description?: string | null;
+          checklist_items?: Json;
           assigned_to?: string | null;
           priority?: Database["public"]["Enums"]["task_priority"];
           status?: Database["public"]["Enums"]["task_status"];

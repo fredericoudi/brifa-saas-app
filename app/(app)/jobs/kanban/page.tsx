@@ -13,7 +13,7 @@ import type { AgencyCommercialContext } from "@/lib/commercial";
 import type { Job, JobParticipantHistory, UserProfile } from "@/lib/database.types";
 import { isMissingJobsArchivedAtColumn } from "@/lib/jobs-archive";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { cn, formatDate, JOB_STATUS_LABEL, JOB_STATUS_ORDER } from "@/lib/utils";
+import { cn, formatDate, getStatusBadgeVariant, JOB_STATUS_LABEL, JOB_STATUS_ORDER } from "@/lib/utils";
 
 type JobStatus = Job["status"];
 
@@ -57,10 +57,7 @@ function sortJobsWithinColumn(a: KanbanJob, b: KanbanJob) {
 }
 
 function buildStatusVariant(status: JobStatus) {
-  if (status === "finalizado") return "success" as const;
-  if (status === "aprovado") return "brand" as const;
-  if (status === "revisao") return "warning" as const;
-  return "neutral" as const;
+  return getStatusBadgeVariant(status);
 }
 
 function mergeParticipants({

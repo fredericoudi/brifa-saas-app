@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Menu, Plus } from "lucide-react";
+import { Menu, Plus } from "lucide-react";
 import { AgencyMark } from "@/components/layout/agency-mark";
+import { NotificationsMenu } from "@/components/layout/notifications-menu";
 import { UserMenu } from "@/components/layout/user-menu";
+import type { AgencyNotificationItem } from "@/lib/notifications";
 
 export function AppTopbar({
   agencyName,
@@ -20,8 +22,8 @@ export function AppTopbar({
   agencyHref,
   canCreateJob,
   newJobHref,
-  alertsHref,
-  notificationCount,
+  notifications,
+  notificationsReadStateKey,
   signingOut,
   onSignOut,
   onMobileMenuToggle,
@@ -41,8 +43,8 @@ export function AppTopbar({
   agencyHref: string;
   canCreateJob: boolean;
   newJobHref: string;
-  alertsHref: string;
-  notificationCount: number;
+  notifications: AgencyNotificationItem[];
+  notificationsReadStateKey: string;
   signingOut: boolean;
   onSignOut: () => Promise<void>;
   onMobileMenuToggle: () => void;
@@ -52,7 +54,7 @@ export function AppTopbar({
 
   return (
     <header
-      className="fixed left-0 right-0 top-0 z-40 h-[84px] border-b border-border/80 bg-panel/96 backdrop-blur-xl lg:left-[var(--topbar-left)]"
+      className="fixed left-0 right-0 top-0 z-40 h-[84px] border-b border-border/80 bg-white lg:left-[var(--topbar-left)]"
       style={{ ["--topbar-left" as string]: `${topbarLeft}px` }}
     >
       <div className="flex h-full items-center justify-between gap-4 px-4 md:px-6 lg:px-7">
@@ -97,18 +99,13 @@ export function AppTopbar({
             </Link>
           ) : null}
 
-          <Link
-            href={alertsHref}
-            className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/80 bg-panel text-muted transition hover:bg-panelAlt hover:text-text"
-            aria-label="Abrir alertas da agência"
-          >
-            <Bell className="h-[18px] w-[18px]" />
-            {notificationCount > 0 ? (
-              <span className="absolute -right-0.5 -top-0.5 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-brand px-1 text-[10px] font-semibold text-white">
-                {notificationCount}
-              </span>
-            ) : null}
-          </Link>
+          <NotificationsMenu
+            notifications={notifications}
+            readStateKey={notificationsReadStateKey}
+            avatarName={profileName}
+            avatarUrl={profileAvatarUrl}
+            avatarUpdatedAt={profileUpdatedAt}
+          />
 
           <UserMenu
             profileName={profileName}

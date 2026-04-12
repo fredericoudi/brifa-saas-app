@@ -137,6 +137,89 @@ function isMissingSupabaseTable(message: string, table: string) {
   return message.includes(`Could not find the table 'public.${table}'`) || message.includes(`relation \"${table}\" does not exist`);
 }
 
+function isMissingAgencyTrialColumns(message: string) {
+  const normalized = message.toLowerCase();
+
+  return (
+    normalized.includes("agencies.trial_activated") ||
+    normalized.includes("agencies.trial_starts_at") ||
+    normalized.includes("agencies.trial_ends_at") ||
+    (normalized.includes("trial_activated") && normalized.includes("does not exist")) ||
+    (normalized.includes("trial_starts_at") && normalized.includes("does not exist")) ||
+    (normalized.includes("trial_ends_at") && normalized.includes("does not exist")) ||
+    (normalized.includes("schema cache") &&
+      (normalized.includes("trial_activated") || normalized.includes("trial_starts_at") || normalized.includes("trial_ends_at")))
+  );
+}
+
+type AgencyCommercialBase = {
+  id: string;
+  name?: string;
+  plan?: Database["public"]["Enums"]["agency_plan"];
+  status?: Database["public"]["Enums"]["agency_status"];
+  created_at?: string;
+  trial_activated?: boolean | null;
+  trial_starts_at?: string | null;
+  trial_ends_at?: string | null;
+};
+
+async function fetchAgencyCommercialBase<T extends AgencyCommercialBase>({
+  supabase,
+  agencyId,
+  selectWithTrialColumns,
+  selectWithoutTrialColumns
+}: {
+  supabase: SupabaseClient<Database>;
+  agencyId: string;
+  selectWithTrialColumns: string;
+  selectWithoutTrialColumns: string;
+}) {
+  const primaryResponse = await supabase
+    .from("agencies")
+    .select(selectWithTrialColumns)
+    .eq("id", agencyId)
+    .maybeSingle();
+
+  if (!primaryResponse.error) {
+    return {
+      data: (primaryResponse.data as T | null) ?? null,
+      error: null as null
+    };
+  }
+
+  if (!isMissingAgencyTrialColumns(primaryResponse.error.message)) {
+    return {
+      data: null as T | null,
+      error: primaryResponse.error
+    };
+  }
+
+  const fallbackResponse = await supabase
+    .from("agencies")
+    .select(selectWithoutTrialColumns)
+    .eq("id", agencyId)
+    .maybeSingle();
+
+  if (fallbackResponse.error) {
+    return {
+      data: null as T | null,
+      error: fallbackResponse.error
+    };
+  }
+
+  return {
+    data: fallbackResponse.data
+      ? ({
+          ...fallbackResponse.data,
+          trial_activated: null,
+          trial_starts_at: null,
+          trial_ends_at: null
+        } as T)
+      : null,
+    error: null as null
+  };
+}
+
 function resolveFreemiumPlan(planCode: string | null | undefined): FreemiumPlanType {
   if (planCode === "pro" || planCode === "growth") {
     return "PRO";
@@ -488,11 +571,12 @@ async function buildLegacyCommercialContext({
   agencyId: string;
 }): Promise<AgencyCommercialContext> {
   const [{ data: rawAgency, error: agencyError }, { count: usersCount }, jobsCount, clientsCount, aiGenerations] = await Promise.all([
-    supabase
-      .from("agencies")
-      .select("id, name, plan, status, trial_activated, created_at, trial_starts_at, trial_ends_at")
-      .eq("id", agencyId)
-      .maybeSingle(),
+    fetchAgencyCommercialBase<Pick<Agency, "id" | "name" | "plan" | "status" | "created_at"> & AgencyCommercialBase>({
+      supabase,
+      agencyId,
+      selectWithTrialColumns: "id, name, plan, status, trial_activated, created_at, trial_starts_at, trial_ends_at",
+      selectWithoutTrialColumns: "id, name, plan, status, created_at"
+    }),
     supabase.from("users").select("id", { count: "exact", head: true }).eq("agency_id", agencyId),
     countActiveJobs({ supabase, agencyId }),
     countClients({ supabase, agencyId }),
@@ -598,11 +682,12 @@ export async function getAgencyCommercialContext({
     clientsCount,
     aiGenerations
   ] = await Promise.all([
-    supabase
-      .from("agencies")
-      .select("id, trial_activated, trial_starts_at, trial_ends_at")
-      .eq("id", agencyId)
-      .maybeSingle(),
+    fetchAgencyCommercialBase<Pick<Agency, "id"> & AgencyCommercialBase>({
+      supabase,
+      agencyId,
+      selectWithTrialColumns: "id, trial_activated, trial_starts_at, trial_ends_at",
+      selectWithoutTrialColumns: "id"
+    }),
     supabase.from("agency_subscriptions").select("*").eq("agency_id", agencyId).maybeSingle(),
     supabase.from("users").select("id", { count: "exact", head: true }).eq("agency_id", agencyId),
     countActiveJobs({ supabase, agencyId }),

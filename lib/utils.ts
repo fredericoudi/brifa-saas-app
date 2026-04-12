@@ -76,3 +76,41 @@ export const TASK_PRIORITY_LABEL: Record<string, string> = {
   media: "Média",
   alta: "Alta"
 };
+
+export type StatusBadgeVariant =
+  | "neutral"
+  | "brand"
+  | "warning"
+  | "success"
+  | "danger"
+  | "statusBriefing"
+  | "statusCriacao"
+  | "statusRevisao"
+  | "statusAprovado"
+  | "statusFinalizado"
+  | "statusEmAndamento"
+  | "statusConcluido"
+  | "statusAFazer";
+
+export function getStatusBadgeVariant(status: string): StatusBadgeVariant {
+  switch (status) {
+    case "briefing":
+      return "statusBriefing";
+    case "criacao":
+      return "statusCriacao";
+    case "revisao":
+      return "statusRevisao";
+    case "aprovado":
+      return "statusAprovado";
+    case "finalizado":
+      return "statusFinalizado";
+    case "em_andamento":
+      return "statusEmAndamento";
+    case "concluido":
+      return "statusConcluido";
+    case "a_fazer":
+      return "statusAFazer";
+    default:
+      return "neutral";
+  }
+}

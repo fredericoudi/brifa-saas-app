@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Archive, Eye, EyeOff, Pencil } from "lucide-react";
+import { Archive, CalendarDays, Pencil, Zap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -11,7 +10,7 @@ import { Select } from "@/components/ui/select";
 import type { Job, UserProfile } from "@/lib/database.types";
 import { getReadableErrorMessage, isMissingJobsArchivedAtColumn } from "@/lib/jobs-archive";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
-import { formatDate, JOB_STATUS_LABEL } from "@/lib/utils";
+import { cn, formatDate, getStatusBadgeVariant, JOB_STATUS_LABEL } from "@/lib/utils";
 
 type JobStatus = Job["status"];
 type SortMode = "entrada_desc" | "entrada_asc" | "entrega_asc" | "entrega_desc";
@@ -57,6 +56,57 @@ function compareJobs(a: JobListItem, b: JobListItem, mode: SortMode) {
   }
 
   return aDue - bDue;
+}
+
+function parseDeadlineTimestamp(dueDate: string | null, dueTime: string | null) {
+  if (!dueDate) return Number.POSITIVE_INFINITY;
+  const timePart = dueTime?.slice(0, 5) || "23:59";
+  return new Date(`${dueDate}T${timePart}:00`).getTime();
+}
+
+function resolveDeadlineProgress(job: Pick<JobListItem, "created_at" | "due_date" | "due_time" | "status">) {
+  if (job.status === "finalizado") return 100;
+  if (!job.due_date) return 0;
+
+  const now = Date.now();
+  const end = parseDeadlineTimestamp(job.due_date, job.due_time);
+  if (!Number.isFinite(end)) return 0;
+
+  const start = new Date(job.created_at).getTime();
+  const totalWindow = Math.max(end - start, 1);
+  const elapsed = now - start;
+  const progress = (elapsed / totalWindow) * 100;
+
+  return Math.max(0, Math.min(100, Math.round(progress)));
+}
+
+function DeadlineProgressRing({ progress }: { progress: number }) {
+  const size = 48;
+  const strokeBase = 2;
+  const strokeProgress = 5;
+  const radius = (size - strokeProgress) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const progressLength = (circumference * progress) / 100;
+
+  return (
+    <span className="relative inline-flex h-12 w-12 items-center justify-center">
+      <svg viewBox={`0 0 ${size} ${size}`} className="h-12 w-12">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#d0d0d0" strokeWidth={strokeBase} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke="hsl(var(--brand))"
+          strokeWidth={strokeProgress}
+          strokeLinecap="round"
+          strokeDasharray={`${progressLength} ${circumference - progressLength}`}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </svg>
+      <Zap className="absolute h-5 w-5 text-brand" />
+    </span>
+  );
 }
 
 export default function TasksPage() {
@@ -231,16 +281,14 @@ export default function TasksPage() {
   }
 
   function renderStatus(status: JobStatus) {
-    const variant =
-      status === "finalizado"
-        ? "success"
-        : status === "aprovado"
-          ? "brand"
-          : status === "revisao"
-            ? "warning"
-            : "neutral";
-
-    return <Badge variant={variant}>{JOB_STATUS_LABEL[status]}</Badge>;
+    return (
+      <Badge
+        variant={getStatusBadgeVariant(status)}
+        className="min-w-[128px] justify-center px-4 py-2 text-[13px] font-semibold uppercase tracking-[0.05em]"
+      >
+        {JOB_STATUS_LABEL[status]}
+      </Badge>
+    );
   }
 
   const filteredJobs = useMemo(() => {
@@ -266,7 +314,7 @@ export default function TasksPage() {
     <div className="space-y-6">
       {error ? <p className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">{error}</p> : null}
 
-      <Card>
+      <Card className="border-0 shadow-[0_18px_34px_-28px_rgba(15,23,42,0.36)]">
         <CardHeader>
           <h2 className="text-base font-semibold">Tarefas da agência</h2>
           <p className="mt-1 text-sm text-muted">Filtre os jobs e abra cada tarefa para consultar briefing e prazo.</p>
@@ -279,161 +327,168 @@ export default function TasksPage() {
             </p>
           ) : null}
 
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-full bg-[#ececec] p-1.5 shadow-[inset_0_1px_2px_rgba(15,23,42,0.08)]">
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
               <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-muted">Ordenação</label>
-                <Select value={sortMode} onChange={(e) => setSortMode(e.target.value as SortMode)}>
-                <option value="entrada_desc">Entrada mais recente</option>
-                <option value="entrada_asc">Entrada mais antiga</option>
-                <option value="entrega_asc">Entrega mais próxima</option>
-                <option value="entrega_desc">Entrega mais distante</option>
-              </Select>
-            </div>
+                  <Select
+                    value={sortMode}
+                    onChange={(e) => setSortMode(e.target.value as SortMode)}
+                    className="h-12 rounded-full border-border/70 bg-white shadow-none"
+                  >
+                    <option value="entrada_desc">Ordem</option>
+                    <option value="entrada_asc">Entrada mais antiga</option>
+                    <option value="entrega_asc">Entrega mais próxima</option>
+                    <option value="entrega_desc">Entrega mais distante</option>
+                  </Select>
+                </div>
 
               <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-muted">Status</label>
-                <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                <option value="todos">Todos</option>
-                <option value="briefing">Briefing</option>
-                <option value="criacao">Criação</option>
-                <option value="revisao">Revisão</option>
-                <option value="aprovado">Aprovado</option>
-                <option value="finalizado">Finalizado</option>
-              </Select>
-            </div>
+                  <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-12 rounded-full border-border/70 bg-white shadow-none">
+                    <option value="todos">Status</option>
+                    <option value="briefing">Briefing</option>
+                    <option value="criacao">Criação</option>
+                    <option value="revisao">Revisão</option>
+                    <option value="aprovado">Aprovado</option>
+                    <option value="finalizado">Finalizado</option>
+                  </Select>
+                </div>
 
               <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-muted">Responsável</label>
                 <Select
-                value={assigneeFilter}
-                onChange={(e) => setAssigneeFilter(e.target.value)}
-                disabled={profile?.role !== "admin"}
-              >
-                {profile?.role === "admin" ? <option value="todos">Todos</option> : null}
-                {assigneeOptions.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
+                    value={assigneeFilter}
+                    onChange={(e) => setAssigneeFilter(e.target.value)}
+                    disabled={profile?.role !== "admin"}
+                    className="h-12 rounded-full border-border/70 bg-white shadow-none"
+                  >
+                    {profile?.role === "admin" ? <option value="todos">Responsável</option> : null}
+                    {assigneeOptions.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
 
               <div>
-                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-muted">Cliente</label>
-                <Select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)}>
-                <option value="todos">Todos</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                  </option>
-                ))}
-              </Select>
+                  <Select value={clientFilter} onChange={(e) => setClientFilter(e.target.value)} className="h-12 rounded-full border-border/70 bg-white shadow-none">
+                    <option value="todos">Cliente</option>
+                    {clients.map((client) => (
+                      <option key={client.id} value={client.id}>
+                        {client.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
             </div>
-          </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <h2 className="text-base font-semibold">Lista de tarefas ({filteredJobs.length})</h2>
-        </CardHeader>
-        <CardContent>
+      <Card className="border-0 shadow-[0_18px_34px_-28px_rgba(15,23,42,0.36)]">
+        <CardContent className="px-0 py-0">
           {filteredJobs.length === 0 ? (
-            <p className="text-sm text-muted">Nenhum job encontrado com os filtros atuais.</p>
+            <p className="px-6 py-6 text-sm text-muted">Nenhum job encontrado com os filtros atuais.</p>
           ) : (
-            <div className="overflow-x-auto rounded-[24px] border border-border bg-panelAlt/35 p-2">
-              <table className="min-w-full text-left text-sm">
-                <thead>
-                  <tr className="text-xs uppercase tracking-[0.16em] text-muted">
-                    <th className="rounded-l-[18px] bg-panel px-4 py-3 text-center">Visto</th>
-                    <th className="bg-panel px-4 py-3">Job</th>
-                    <th className="bg-panel px-4 py-3">Cliente</th>
-                    <th className="bg-panel px-4 py-3">Responsável</th>
-                    <th className="bg-panel px-4 py-3">Status</th>
-                    <th className="bg-panel px-4 py-3">Início</th>
-                    <th className="bg-panel px-4 py-3">Entrega</th>
-                    <th className="rounded-r-[18px] bg-panel px-4 py-3 text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="[&_tr:last-child]:border-b-0">
-                  {filteredJobs.map((job) => (
-                    <tr
-                      key={job.id}
-                      className="group cursor-pointer border-b border-border/60 transition hover:bg-white/80 focus-visible:bg-white/80"
-                      onClick={() => router.push(`/jobs/${job.id}`)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          router.push(`/jobs/${job.id}`);
-                        }
-                      }}
-                      tabIndex={0}
-                      role="link"
-                      aria-label={`Abrir job ${job.title}`}
-                    >
-                      <td className="px-4 py-4">
-                        <div className="flex items-center justify-center">
-                          {job.seenByResponsible ? (
-                            <span title="Visualizado">
-                              <Eye className="h-4 w-4 text-brand" aria-label="Visualizado" />
-                            </span>
-                          ) : (
-                            <span title="Ainda não visualizado">
-                              <EyeOff className="h-4 w-4 text-muted" aria-label="Ainda não visualizado" />
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 font-medium">
-                        <span className="transition group-hover:text-brand">{job.title}</span>
-                        {job.job_code ? <p className="text-xs text-muted">{job.job_code}</p> : null}
-                      </td>
-                      <td className="px-4 py-4 text-muted">{job.clientName ?? "-"}</td>
-                      <td className="px-4 py-4 text-muted">
-                        {job.assignees.length > 0 ? job.assignees.map((assignee) => assignee.name).join(", ") : "-"}
-                      </td>
-                      <td className="px-4 py-4">{renderStatus(job.status)}</td>
-                      <td className="px-4 py-4 text-muted">{new Date(job.created_at).toLocaleDateString("pt-BR")}</td>
-                      <td className="px-4 py-4 text-muted">
+            <div className="overflow-hidden rounded-[24px]">
+              <div className="hidden xl:grid xl:grid-cols-[1.15fr_1.1fr_0.9fr_0.9fr_0.7fr_0.44fr] xl:gap-4 xl:px-6 xl:py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Job</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Deadline</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Cliente</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Responsável</p>
+                <p className="text-right text-xs font-semibold uppercase tracking-[0.16em] text-muted">Status</p>
+                <p className="text-right text-xs font-semibold uppercase tracking-[0.16em] text-muted">Ações</p>
+              </div>
+              {filteredJobs.map((job, index) => (
+                <div
+                  key={job.id}
+                  className={cn(
+                    "group grid cursor-pointer gap-4 px-6 py-6 transition hover:bg-[#fafafa] focus-visible:bg-[#fafafa] xl:grid-cols-[1.15fr_1.1fr_0.9fr_0.9fr_0.7fr_0.44fr]",
+                    index > 0 ? "border-t border-[#ececec]" : ""
+                  )}
+                  onClick={() => router.push(`/jobs/${job.id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      router.push(`/jobs/${job.id}`);
+                    }
+                  }}
+                  tabIndex={0}
+                  role="link"
+                  aria-label={`Abrir job ${job.title}`}
+                >
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-brand">{job.job_code ?? "Sem código"}</p>
+                    <p className="text-[1.85rem] leading-none font-semibold text-text xl:text-[1.4rem]">{job.title}</p>
+                    <div className="flex items-center gap-2 text-sm text-muted">
+                      <CalendarDays className="h-4 w-4" />
+                      <span>Criado em {new Date(job.created_at).toLocaleDateString("pt-BR")}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <DeadlineProgressRing progress={resolveDeadlineProgress(job)} />
+                    <div>
+                      <p className="text-sm text-muted">Deadline</p>
+                      <p className="text-[1.35rem] font-semibold leading-tight text-text xl:text-base">
                         {formatDate(job.due_date)}
-                        {job.due_time ? <p className="text-xs">às {job.due_time.slice(0, 5)}</p> : null}
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex justify-end gap-2">
-                          {profile?.role === "admin" ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  router.push(`/jobs?edit=${job.id}`);
-                                }}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-[16px] border border-border bg-panel text-text transition hover:bg-panelAlt"
-                                aria-label={`Editar ${job.title}`}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void archiveJob(job);
-                                }}
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-[16px] border border-border bg-panel text-text transition hover:bg-panelAlt"
-                                aria-label={`Arquivar ${job.title}`}
-                              >
-                                <Archive className="h-4 w-4" />
-                              </button>
-                            </>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted">Cliente</p>
+                    <p className="text-[1.35rem] font-semibold leading-tight text-text xl:text-[1.22rem]">{job.clientName ?? "-"}</p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted">Responsável</p>
+                    <p className="text-[1.35rem] font-semibold leading-tight text-text xl:text-[1.22rem]">
+                      {job.assignees.length > 0 ? job.assignees.map((assignee) => assignee.name).join(", ") : "-"}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-start xl:justify-end">{renderStatus(job.status)}</div>
+
+                  <div className="flex items-center justify-start xl:justify-end">
+                    <div className="flex items-center gap-2">
+                      {profile?.role === "admin" ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              router.push(`/jobs?edit=${job.id}`);
+                            }}
+                            className="inline-flex h-10 w-10 items-center justify-center border border-border bg-panel text-text transition hover:bg-panelAlt"
+                            aria-label={`Editar ${job.title}`}
+                          >
+                            <Pencil className="h-[18px] w-[18px]" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void archiveJob(job);
+                            }}
+                            className="inline-flex h-10 w-10 items-center justify-center border border-border bg-panel text-text transition hover:bg-panelAlt"
+                            aria-label={`Arquivar ${job.title}`}
+                          >
+                            <Archive className="h-[18px] w-[18px]" />
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
+
+          {filteredJobs.length > 0 ? (
+            <div className="px-6 pb-6 pt-4 text-sm text-muted">
+              Mostrando {filteredJobs.length} {filteredJobs.length === 1 ? "tarefa" : "tarefas"}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertAgencyActionAllowed } from "@/lib/commercial";
+import { normalizeTaskChecklistItems } from "@/lib/task-checklist";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createJobFolder, refreshGoogleAccessToken } from "@/services/googleDriveService";
+
+const taskChecklistItemSchema = z.object({
+  id: z.string().trim().min(1).max(120).optional(),
+  text: z.string().trim().min(1).max(240),
+  done: z.boolean().default(false),
+  created_at: z.string().datetime().optional(),
+  completed_at: z.string().datetime().nullable().optional()
+});
 
 const createTaskSchema = z.object({
   title: z.string().trim().min(1).max(180),
@@ -20,7 +29,8 @@ const createTaskSchema = z.object({
     .optional()
     .nullable(),
   description: z.string().trim().max(12000).optional().nullable(),
-  assignee_ids: z.array(z.string().uuid()).max(1).default([])
+  assignee_ids: z.array(z.string().uuid()).max(1).default([]),
+  checklist_items: z.array(taskChecklistItemSchema).max(200).default([])
 });
 
 const createJobSchema = z.object({
@@ -459,6 +469,7 @@ export async function POST(request: Request) {
           job_id: createdJob.id,
           title: task.title,
           description: task.description || null,
+          checklist_items: normalizeTaskChecklistItems(task.checklist_items),
           assigned_to: task.assignee_ids[0] ?? null,
           priority: task.priority,
           status: task.status,

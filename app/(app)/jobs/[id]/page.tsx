@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { File, FileDown, Video } from "lucide-react";
 import { JobExitBar } from "@/components/jobs/job-exit-bar";
 import { JobViewTracker } from "@/components/jobs/job-view-tracker";
 import { AvatarGroup } from "@/components/ui/avatar-group";
@@ -8,8 +9,9 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { requireAuth } from "@/lib/auth";
 import type { Job, JobParticipantHistory } from "@/lib/database.types";
+import { getTaskChecklistProgress, normalizeTaskChecklistItems } from "@/lib/task-checklist";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { formatDate, JOB_STATUS_LABEL, TASK_PRIORITY_LABEL, TASK_STATUS_LABEL } from "@/lib/utils";
+import { formatDate, getStatusBadgeVariant, JOB_STATUS_LABEL, TASK_PRIORITY_LABEL, TASK_STATUS_LABEL } from "@/lib/utils";
 
 type JobTask = {
   id: string;
@@ -19,6 +21,7 @@ type JobTask = {
   due_date: string | null;
   due_time: string | null;
   description: string | null;
+  checklist_items?: unknown;
 };
 
 type TimelineEvent = {
@@ -54,6 +57,22 @@ type ParticipantHistoryEntry = Pick<
   user: { name: string; avatar_url: string | null; updated_at: string } | null;
 };
 
+type JobMediaFile = {
+  id: string;
+  file_name: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  created_at: string;
+  storage_path: string;
+};
+
+type JobMediaListItem = JobMediaFile & {
+  preview_url: string | null;
+  download_url: string | null;
+  is_image: boolean;
+  is_video: boolean;
+};
+
 const EVENT_TYPE_LABEL: Record<string, string> = {
   job_created: "Job criado",
   assignee_defined: "Responsável definido",
@@ -64,7 +83,8 @@ const EVENT_TYPE_LABEL: Record<string, string> = {
   job_archived: "Job arquivado",
   job_participation_finished: "Saída registrada",
   briefing_updated: "Briefing atualizado",
-  file_attached: "Arquivo anexado"
+  file_attached: "Arquivo anexado",
+  file_deleted: "Arquivo removido"
 };
 
 function formatEventType(eventType: string) {
@@ -88,6 +108,27 @@ function formatParticipationEndReason(reason: ParticipantHistoryEntry["end_reaso
   return "Histórico registrado";
 }
 
+function formatFileSize(bytes: number | null) {
+  if (!bytes || bytes <= 0) return "-";
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  const kb = bytes / 1024;
+  if (kb < 1024) {
+    return `${kb.toFixed(1)} KB`;
+  }
+
+  const mb = kb / 1024;
+  return `${mb.toFixed(1)} MB`;
+}
+
+function isMissingTaskChecklistItemsColumn(errorMessage: string) {
+  const normalized = errorMessage.toLowerCase();
+  return normalized.includes("checklist_items") && normalized.includes("tasks") && normalized.includes("schema cache");
+}
+
 export default async function JobDetailPage({ params }: { params: { id: string } }) {
   const { profile } = await requireAuth();
   const supabase = createServerSupabaseClient();
@@ -105,16 +146,24 @@ export default async function JobDetailPage({ params }: { params: { id: string }
 
   const typedJob = job as Job & { client: { name: string | null; company: string | null } | null };
 
-  const { data: tasks } = await supabase
+  let tasksResponse = await supabase
     .from("tasks")
-    .select("id, title, priority, status, due_date, due_time, description")
+    .select("id, title, priority, status, due_date, due_time, description, checklist_items")
     .eq("job_id", typedJob.id)
     .order("created_at", { ascending: false });
 
-  const typedTasks = ((tasks as JobTask[] | null) ?? []);
+  if (tasksResponse.error && isMissingTaskChecklistItemsColumn(tasksResponse.error.message)) {
+    tasksResponse = await supabase
+      .from("tasks")
+      .select("id, title, priority, status, due_date, due_time, description")
+      .eq("job_id", typedJob.id)
+      .order("created_at", { ascending: false });
+  }
+
+  const typedTasks = ((tasksResponse.data as JobTask[] | null) ?? []);
   const taskIds = typedTasks.map((task) => task.id);
 
-  const [{ data: taskAssignees }, { data: timelineEvents }, { data: participantHistory }] = await Promise.all([
+  const [{ data: taskAssignees }, { data: timelineEvents }, { data: participantHistory }, { data: jobMediaRaw }] = await Promise.all([
     taskIds.length > 0
       ? supabase
           .from("task_assignees")
@@ -134,7 +183,13 @@ export default async function JobDetailPage({ params }: { params: { id: string }
       )
       .eq("agency_id", profile.agency_id)
       .eq("job_id", typedJob.id)
-      .order("assigned_at", { ascending: false })
+      .order("assigned_at", { ascending: false }),
+    supabase
+      .from("job_media_files")
+      .select("id, file_name, mime_type, size_bytes, created_at, storage_path")
+      .eq("agency_id", profile.agency_id)
+      .eq("job_id", typedJob.id)
+      .order("created_at", { ascending: false })
   ]);
 
   const assigneesByTask = new Map<string, string[]>();
@@ -172,6 +227,29 @@ export default async function JobDetailPage({ params }: { params: { id: string }
   );
   const currentUserTasks = typedTasks.filter((task) => assignedTaskIds.has(task.id));
   const allTasks = typedTasks;
+  const typedJobMedia = (jobMediaRaw as JobMediaFile[] | null) ?? [];
+  const jobMediaFiles = await Promise.all(
+    typedJobMedia.map(async (file) => {
+      const isImage = Boolean(file.mime_type?.startsWith("image/"));
+      const isVideo = Boolean(file.mime_type?.startsWith("video/"));
+      const [{ data: previewData }, { data: downloadData }] = await Promise.all([
+        isImage
+          ? supabase.storage.from("job-attachments").createSignedUrl(file.storage_path, 60 * 30)
+          : Promise.resolve({ data: null }),
+        supabase.storage.from("job-attachments").createSignedUrl(file.storage_path, 60 * 30, {
+          download: file.file_name
+        })
+      ]);
+
+      return {
+        ...file,
+        is_image: isImage,
+        is_video: isVideo,
+        preview_url: previewData?.signedUrl ?? null,
+        download_url: downloadData?.signedUrl ?? null
+      } satisfies JobMediaListItem;
+    })
+  );
   return (
     <div className="space-y-6 pb-28">
       <JobViewTracker
@@ -189,7 +267,7 @@ export default async function JobDetailPage({ params }: { params: { id: string }
               <p className="mt-1 text-sm text-muted">Cliente: {typedJob.client?.name ?? "-"}</p>
               {typedJob.job_code ? <p className="mt-1 text-xs text-muted">Código: {typedJob.job_code}</p> : null}
             </div>
-            <Badge variant={typedJob.status === "finalizado" ? "success" : "brand"}>{JOB_STATUS_LABEL[typedJob.status]}</Badge>
+            <Badge variant={getStatusBadgeVariant(typedJob.status)}>{JOB_STATUS_LABEL[typedJob.status]}</Badge>
           </div>
         </CardHeader>
         <CardContent>
@@ -222,6 +300,57 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           <div className="mt-6">
             <p className="text-xs uppercase tracking-wide text-muted">Briefing</p>
             <p className="mt-2 whitespace-pre-wrap text-sm text-muted">{typedJob.description || "Sem briefing."}</p>
+          </div>
+
+          <div className="mt-6">
+            <p className="text-xs uppercase tracking-wide text-muted">Arquivos do Job</p>
+            {jobMediaFiles.length === 0 ? (
+              <p className="mt-2 text-sm text-muted">Nenhum arquivo anexado neste job.</p>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {jobMediaFiles.map((file) => (
+                  <div
+                    key={file.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-panelAlt px-3 py-2"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="h-11 w-11 shrink-0 overflow-hidden rounded-md border border-border bg-white">
+                        {file.is_image && file.preview_url ? (
+                          <img src={file.preview_url} alt={file.file_name} className="h-full w-full object-cover" />
+                        ) : file.is_video ? (
+                          <div className="flex h-full w-full items-center justify-center text-muted">
+                            <Video className="h-5 w-5" />
+                          </div>
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-muted">
+                            <File className="h-5 w-5" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{file.file_name}</p>
+                        <p className="text-xs text-muted">
+                          Adicionado em {formatDateTime(file.created_at)} • {formatFileSize(file.size_bytes)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {file.download_url ? (
+                      <a
+                        href={file.download_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-text transition hover:bg-panel"
+                      >
+                        <FileDown className="h-4 w-4" />
+                        Download
+                      </a>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="mt-4">
@@ -276,26 +405,60 @@ export default async function JobDetailPage({ params }: { params: { id: string }
               <p className="text-sm text-muted">Nenhuma tarefa foi atribuída a você neste job.</p>
             ) : (
               <div className="space-y-3">
-                {currentUserTasks.map((task) => (
-                  <div key={task.id} className="rounded-xl border border-brand/20 bg-brand/5 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-base font-semibold">{task.title}</p>
-                      <Badge variant={task.status === "concluido" ? "success" : "brand"}>
-                        {TASK_STATUS_LABEL[task.status]}
-                      </Badge>
+                {currentUserTasks.map((task) => {
+                  const checklistItems = normalizeTaskChecklistItems(task.checklist_items);
+                  const checklistProgress = getTaskChecklistProgress(checklistItems);
+
+                  return (
+                    <div key={task.id} className="rounded-xl border border-brand/20 bg-brand/5 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-base font-semibold">{task.title}</p>
+                        <Badge variant={getStatusBadgeVariant(task.status)}>
+                          {TASK_STATUS_LABEL[task.status]}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted">
+                        <span>Prioridade: {TASK_PRIORITY_LABEL[task.priority]}</span>
+                        <span>
+                          Prazo: {formatDate(task.due_date)}
+                          {task.due_time ? ` às ${task.due_time.slice(0, 5)}` : ""}
+                        </span>
+                      </div>
+                      <p className="mt-3 whitespace-pre-wrap text-sm text-muted">
+                        {task.description || "Sem descrição complementar para esta tarefa."}
+                      </p>
+
+                      <div className="mt-4 rounded-xl border border-border/70 bg-white/90 p-3">
+                        <div className="flex items-center justify-between text-xs text-muted">
+                          <p className="font-semibold uppercase tracking-wide">Checklist</p>
+                          <p className="font-semibold">
+                            {checklistProgress.completed}/{checklistProgress.total} • {checklistProgress.percent}%
+                          </p>
+                        </div>
+                        <div className="mt-2 h-2 rounded-full bg-border/70">
+                          <span
+                            className="block h-2 rounded-full bg-brand"
+                            style={{ width: `${checklistProgress.percent}%` }}
+                          />
+                        </div>
+                        {checklistItems.length > 0 ? (
+                          <ul className="mt-3 space-y-1 text-sm text-text">
+                            {checklistItems.map((item) => (
+                              <li key={item.id} className="flex items-center gap-2">
+                                <span className="inline-flex h-4 w-4 items-center justify-center rounded border border-border bg-white text-[10px]">
+                                  {item.done ? "✓" : ""}
+                                </span>
+                                <span className={item.done ? "line-through text-muted" : ""}>{item.text}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-3 text-xs text-muted">Nenhum item de checklist nesta tarefa.</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted">
-                      <span>Prioridade: {TASK_PRIORITY_LABEL[task.priority]}</span>
-                      <span>
-                        Prazo: {formatDate(task.due_date)}
-                        {task.due_time ? ` às ${task.due_time.slice(0, 5)}` : ""}
-                      </span>
-                    </div>
-                    <p className="mt-3 whitespace-pre-wrap text-sm text-muted">
-                      {task.description || "Sem descrição complementar para esta tarefa."}
-                    </p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
@@ -319,11 +482,13 @@ export default async function JobDetailPage({ params }: { params: { id: string }
               <div className="space-y-3">
                 {allTasks.map((task) => {
                   const assignees = assigneesByTask.get(task.id) ?? [];
+                  const checklistItems = normalizeTaskChecklistItems(task.checklist_items);
+                  const checklistProgress = getTaskChecklistProgress(checklistItems);
                   return (
                     <div key={task.id} className="rounded-xl border border-border p-3">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-sm font-medium">{task.title}</p>
-                        <Badge variant={task.status === "concluido" ? "success" : "neutral"}>
+                        <Badge variant={getStatusBadgeVariant(task.status)}>
                           {TASK_STATUS_LABEL[task.status]}
                         </Badge>
                       </div>
@@ -338,6 +503,35 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                         </span>
                       </div>
                       {task.description ? <p className="mt-2 text-sm text-muted">{task.description}</p> : null}
+
+                      <div className="mt-3 rounded-xl border border-border/70 bg-panelAlt/60 p-3">
+                        <div className="flex items-center justify-between text-xs text-muted">
+                          <p className="font-semibold uppercase tracking-wide">Checklist</p>
+                          <p className="font-semibold">
+                            {checklistProgress.completed}/{checklistProgress.total} • {checklistProgress.percent}%
+                          </p>
+                        </div>
+                        <div className="mt-2 h-2 rounded-full bg-border/70">
+                          <span
+                            className="block h-2 rounded-full bg-brand"
+                            style={{ width: `${checklistProgress.percent}%` }}
+                          />
+                        </div>
+                        {checklistItems.length > 0 ? (
+                          <ul className="mt-3 space-y-1 text-xs text-muted">
+                            {checklistItems.map((item) => (
+                              <li key={item.id} className="flex items-center gap-2">
+                                <span className="inline-flex h-4 w-4 items-center justify-center rounded border border-border bg-white text-[10px]">
+                                  {item.done ? "✓" : ""}
+                                </span>
+                                <span className={item.done ? "line-through" : ""}>{item.text}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-3 text-xs text-muted">Nenhum item de checklist nesta tarefa.</p>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -384,10 +578,10 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                             <Badge variant={entry.is_active ? "brand" : "neutral"}>
                               {formatParticipationEndReason(entry.end_reason, entry.is_active)}
                             </Badge>
-                            <Badge variant={finalJobStatus === "finalizado" ? "success" : "neutral"}>
+                            <Badge variant={getStatusBadgeVariant(finalJobStatus)}>
                               {JOB_STATUS_LABEL[finalJobStatus]}
                             </Badge>
-                            {finalTaskStatus ? <Badge variant="neutral">{TASK_STATUS_LABEL[finalTaskStatus]}</Badge> : null}
+                            {finalTaskStatus ? <Badge variant={getStatusBadgeVariant(finalTaskStatus)}>{TASK_STATUS_LABEL[finalTaskStatus]}</Badge> : null}
                           </div>
                         </div>
                       </div>

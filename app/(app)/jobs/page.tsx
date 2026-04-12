@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { File, FileDown, Trash2, Video, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -11,7 +12,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { type AgencyCommercialContext } from "@/lib/commercial";
 import type { Client, Database, Job, Task, UserProfile } from "@/lib/database.types";
 import { isMissingJobsArchivedAtColumn } from "@/lib/jobs-archive";
+import { createTaskChecklistItem, getTaskChecklistProgress, normalizeTaskChecklistItems, type TaskChecklistItem } from "@/lib/task-checklist";
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 
 type JobWithClient = Job & { client: { name: string } | null };
 
@@ -26,6 +29,7 @@ type JobTaskForm = {
   due_time: string;
   description: string;
   assignee_id: string;
+  checklist_items: TaskChecklistItem[];
 };
 
 type JobForm = {
@@ -54,6 +58,7 @@ type EditingSnapshot = {
     due_time: string;
     description: string;
     assignee_id: string;
+    checklist_items: TaskChecklistItem[];
   }>;
 };
 
@@ -66,6 +71,31 @@ type TaskSyncSummary = {
   assigneesChanged: string[];
 };
 
+type JobMediaFile = Database["public"]["Tables"]["job_media_files"]["Row"];
+
+type JobMediaListItem = JobMediaFile & {
+  previewUrl: string | null;
+  isImage: boolean;
+  isVideo: boolean;
+};
+
+type PendingJobMediaListItem = {
+  localId: string;
+  file: File;
+  file_name: string;
+  mime_type: string | null;
+  size_bytes: number;
+  created_at: string;
+  previewUrl: string | null;
+  isImage: boolean;
+  isVideo: boolean;
+};
+
+type CreatedJobSummary = {
+  title: string;
+  message: string;
+};
+
 const EMPTY_TASK: JobTaskForm = {
   title: "",
   priority: "media",
@@ -73,8 +103,12 @@ const EMPTY_TASK: JobTaskForm = {
   due_date: "",
   due_time: "",
   description: "",
-  assignee_id: ""
+  assignee_id: "",
+  checklist_items: []
 };
+
+const JOB_ATTACHMENTS_BUCKET = "job-attachments";
+const MAX_ATTACHMENT_SIZE_BYTES = 50 * 1024 * 1024;
 
 const INITIAL_FORM: JobForm = {
   title: "",
@@ -114,6 +148,78 @@ function normalizeTimeValue(value: string | null | undefined) {
   return /^\d{2}:\d{2}/.test(value) ? value.slice(0, 5) : "";
 }
 
+function sanitizeFileName(fileName: string) {
+  return fileName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9._-]/g, "")
+    .slice(0, 120);
+}
+
+function formatFileSize(bytes: number | null) {
+  if (!bytes || bytes <= 0) return "-";
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  const kb = bytes / 1024;
+  if (kb < 1024) {
+    return `${kb.toFixed(1)} KB`;
+  }
+
+  const mb = kb / 1024;
+  return `${mb.toFixed(1)} MB`;
+}
+
+function formatMediaAddedAt(value: string) {
+  return new Date(value).toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short"
+  });
+}
+
+function formatAttachmentUploadSuccess(uploadedCount: number) {
+  return uploadedCount === 1 ? "1 arquivo anexado com sucesso." : `${uploadedCount} arquivos anexados com sucesso.`;
+}
+
+function mapPendingMediaFile(file: File): PendingJobMediaListItem {
+  const mimeType = file.type || null;
+  const isImage = Boolean(mimeType?.startsWith("image/"));
+  const isVideo = Boolean(mimeType?.startsWith("video/"));
+
+  return {
+    localId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    file,
+    file_name: file.name,
+    mime_type: mimeType,
+    size_bytes: file.size,
+    created_at: new Date().toISOString(),
+    previewUrl: isImage ? URL.createObjectURL(file) : null,
+    isImage,
+    isVideo
+  };
+}
+
+function isMissingJobMediaTable(errorMessage: string) {
+  const normalized = errorMessage.toLowerCase();
+  return (
+    normalized.includes("job_media_files") &&
+    (normalized.includes("could not find the table") || normalized.includes("relation") || normalized.includes("schema cache"))
+  );
+}
+
+function isMissingTaskChecklistItemsColumn(errorMessage: string) {
+  const normalized = errorMessage.toLowerCase();
+  return normalized.includes("checklist_items") && normalized.includes("tasks") && normalized.includes("schema cache");
+}
+
+function extractMissingTaskColumn(errorMessage: string) {
+  const match = errorMessage.match(/Could not find the '([^']+)' column of 'tasks' in the schema cache/i);
+  return match?.[1] ?? null;
+}
+
 export default function JobsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -135,6 +241,14 @@ export default function JobsPage() {
   const [aiLimitModalMessage, setAiLimitModalMessage] = useState("");
   const [aiLimitModalTrialActivated, setAiLimitModalTrialActivated] = useState(false);
   const [activatingTrial, setActivatingTrial] = useState(false);
+  const [jobMediaFiles, setJobMediaFiles] = useState<JobMediaListItem[]>([]);
+  const [pendingJobMediaFiles, setPendingJobMediaFiles] = useState<PendingJobMediaListItem[]>([]);
+  const [createdJobSummary, setCreatedJobSummary] = useState<CreatedJobSummary | null>(null);
+  const [loadingJobMedia, setLoadingJobMedia] = useState(false);
+  const [uploadingJobMedia, setUploadingJobMedia] = useState(false);
+  const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
+  const [taskChecklistDrafts, setTaskChecklistDrafts] = useState<Record<string, string>>({});
+  const mediaInputRef = useRef<HTMLInputElement | null>(null);
 
   const isEditing = useMemo(() => Boolean(form.id), [form.id]);
   const isAdmin = profile?.role === "admin";
@@ -142,6 +256,259 @@ export default function JobsPage() {
   const createTaskPermission = commercialContext?.permissions.create_task ?? { allowed: true, message: null, reason: null };
   const aiBriefingPermission = commercialContext?.permissions.ai_briefing ?? { allowed: true, message: null, reason: null };
   const readOnlyMode = commercialContext?.readOnlyMode ?? false;
+
+  function clearPendingJobMediaFiles() {
+    setPendingJobMediaFiles((current) => {
+      current.forEach((file) => {
+        if (file.previewUrl) {
+          URL.revokeObjectURL(file.previewUrl);
+        }
+      });
+      return [];
+    });
+  }
+
+  function removePendingJobMedia(localId: string) {
+    setPendingJobMediaFiles((current) =>
+      current.filter((file) => {
+        if (file.localId === localId && file.previewUrl) {
+          URL.revokeObjectURL(file.previewUrl);
+        }
+        return file.localId !== localId;
+      })
+    );
+  }
+
+  async function loadJobMedia(jobId: string) {
+    if (!profile) {
+      setJobMediaFiles([]);
+      return;
+    }
+
+    try {
+      setLoadingJobMedia(true);
+      const supabase = createBrowserSupabaseClient();
+      const { data, error: mediaError } = await supabase
+        .from("job_media_files")
+        .select("*")
+        .eq("agency_id", profile.agency_id)
+        .eq("job_id", jobId)
+        .order("created_at", { ascending: false });
+
+      if (mediaError) {
+        throw mediaError;
+      }
+
+      const typedMedia = (data ?? []) as JobMediaFile[];
+
+      const withPreview = await Promise.all(
+        typedMedia.map(async (file) => {
+          const isImage = Boolean(file.mime_type?.startsWith("image/"));
+          const isVideo = Boolean(file.mime_type?.startsWith("video/"));
+
+          if (!isImage) {
+            return {
+              ...file,
+              isImage,
+              isVideo,
+              previewUrl: null
+            } satisfies JobMediaListItem;
+          }
+
+          const { data: previewData } = await supabase.storage
+            .from(JOB_ATTACHMENTS_BUCKET)
+            .createSignedUrl(file.storage_path, 60 * 60);
+
+          return {
+            ...file,
+            isImage,
+            isVideo,
+            previewUrl: previewData?.signedUrl ?? null
+          } satisfies JobMediaListItem;
+        })
+      );
+
+      setJobMediaFiles(withPreview);
+    } catch (mediaError) {
+      if (mediaError instanceof Error && isMissingJobMediaTable(mediaError.message)) {
+        setJobMediaFiles([]);
+        return;
+      }
+
+      setJobMediaFiles([]);
+      setError("Não foi possível carregar os anexos deste job.");
+    } finally {
+      setLoadingJobMedia(false);
+    }
+  }
+
+  async function openMediaDownload(file: JobMediaListItem) {
+    try {
+      const supabase = createBrowserSupabaseClient();
+      const { data, error: signedUrlError } = await supabase.storage
+        .from(JOB_ATTACHMENTS_BUCKET)
+        .createSignedUrl(file.storage_path, 60 * 5, {
+          download: file.file_name
+        });
+
+      if (signedUrlError || !data?.signedUrl) {
+        throw signedUrlError ?? new Error("Não foi possível gerar o link de download.");
+      }
+
+      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : "Falha ao baixar o arquivo.");
+    }
+  }
+
+  async function handleDeleteMedia(file: JobMediaListItem) {
+    if (!profile || !form.id || !isAdmin) return;
+
+    const confirmed = window.confirm(`Deseja remover o arquivo "${file.file_name}"?`);
+    if (!confirmed) return;
+
+    try {
+      setDeletingMediaId(file.id);
+      setError("");
+      setSuccess("");
+      const supabase = createBrowserSupabaseClient();
+
+      const { error: storageError } = await supabase.storage.from(JOB_ATTACHMENTS_BUCKET).remove([file.storage_path]);
+      if (storageError) throw storageError;
+
+      const { error: deleteError } = await supabase
+        .from("job_media_files")
+        .delete()
+        .eq("id", file.id)
+        .eq("job_id", form.id)
+        .eq("agency_id", profile.agency_id);
+      if (deleteError) throw deleteError;
+
+      const { error: eventError } = await supabase.from("job_events").insert({
+        job_id: form.id,
+        user_id: profile.id,
+        event_type: "file_deleted",
+        description: `Arquivo removido: "${file.file_name}".`
+      });
+
+      if (eventError) {
+        console.error("Falha ao registrar remoção de arquivo:", eventError.message);
+      }
+
+      setSuccess("Arquivo removido com sucesso.");
+      await loadJobMedia(form.id);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Falha ao remover o arquivo.");
+    } finally {
+      setDeletingMediaId(null);
+    }
+  }
+
+  async function uploadMediaFilesToJob({
+    files,
+    jobId
+  }: {
+    files: File[];
+    jobId: string;
+  }) {
+    if (!profile) {
+      throw new Error("Sessão expirada.");
+    }
+
+    const supabase = createBrowserSupabaseClient();
+    let uploadedCount = 0;
+
+    for (const file of files) {
+      if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+        throw new Error(`O arquivo "${file.name}" excede o limite de 50 MB.`);
+      }
+
+      const safeName = sanitizeFileName(file.name) || `arquivo-${Date.now()}`;
+      const storagePath = `${profile.agency_id}/jobs/${jobId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`;
+
+      const { error: uploadError } = await supabase.storage.from(JOB_ATTACHMENTS_BUCKET).upload(storagePath, file, {
+        upsert: false,
+        cacheControl: "3600",
+        contentType: file.type || undefined
+      });
+
+      if (uploadError) throw uploadError;
+
+      const { error: insertError } = await supabase.from("job_media_files").insert({
+        agency_id: profile.agency_id,
+        job_id: jobId,
+        file_name: file.name,
+        storage_path: storagePath,
+        mime_type: file.type || null,
+        size_bytes: file.size,
+        created_by: profile.id
+      });
+
+      if (insertError) {
+        await supabase.storage.from(JOB_ATTACHMENTS_BUCKET).remove([storagePath]);
+        throw insertError;
+      }
+
+      const { error: eventError } = await supabase.from("job_events").insert({
+        job_id: jobId,
+        user_id: profile.id,
+        event_type: "file_attached",
+        description: `Arquivo anexado: "${file.name}".`
+      });
+
+      if (eventError) {
+        console.error("Falha ao registrar anexo de arquivo:", eventError.message);
+      }
+
+      uploadedCount += 1;
+    }
+
+    return uploadedCount;
+  }
+
+  async function handleMediaInputChange(event: React.ChangeEvent<HTMLInputElement>) {
+    if (!profile || !isAdmin || readOnlyMode) return;
+
+    const selectedFiles = Array.from(event.target.files ?? []);
+    if (selectedFiles.length === 0) return;
+
+    try {
+      setUploadingJobMedia(true);
+      setError("");
+      setSuccess("");
+
+      if (form.id) {
+        const uploadedCount = await uploadMediaFilesToJob({
+          files: selectedFiles,
+          jobId: form.id
+        });
+
+        setSuccess(formatAttachmentUploadSuccess(uploadedCount));
+        await loadJobMedia(form.id);
+      } else {
+        for (const file of selectedFiles) {
+          if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+            throw new Error(`O arquivo "${file.name}" excede o limite de 50 MB.`);
+          }
+        }
+
+        const pendingFiles = selectedFiles.map(mapPendingMediaFile);
+        setPendingJobMediaFiles((current) => [...pendingFiles, ...current]);
+        setSuccess(
+          selectedFiles.length === 1
+            ? "Arquivo adicionado. O envio será concluído ao salvar o job."
+            : `${selectedFiles.length} arquivos adicionados. O envio será concluído ao salvar o job.`
+        );
+      }
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "Falha ao anexar arquivos.");
+    } finally {
+      setUploadingJobMedia(false);
+      if (mediaInputRef.current) {
+        mediaInputRef.current.value = "";
+      }
+    }
+  }
 
   async function loadData() {
     setError("");
@@ -259,18 +626,28 @@ export default function JobsPage() {
     }
 
     setError("");
+    setCreatedJobSummary(null);
+    clearPendingJobMediaFiles();
 
     try {
       const supabase = createBrowserSupabaseClient();
-      const { data: tasksData, error: tasksError } = await supabase
+      let tasksResponse = await supabase
         .from("tasks")
-        .select("id, title, priority, status, due_date, due_time, description, task_assignees(user_id)")
+        .select("id, title, priority, status, due_date, due_time, description, checklist_items, task_assignees(user_id)")
         .eq("job_id", job.id)
         .order("created_at", { ascending: true });
 
-      if (tasksError) throw tasksError;
+      if (tasksResponse.error && isMissingTaskChecklistItemsColumn(tasksResponse.error.message)) {
+        tasksResponse = await supabase
+          .from("tasks")
+          .select("id, title, priority, status, due_date, due_time, description, task_assignees(user_id)")
+          .eq("job_id", job.id)
+          .order("created_at", { ascending: true });
+      }
 
-      const parsedTasks = ((tasksData as Array<{
+      if (tasksResponse.error) throw tasksResponse.error;
+
+      const parsedTasks = ((tasksResponse.data as Array<{
         id: string;
         title: string;
         priority: Task["priority"];
@@ -278,6 +655,7 @@ export default function JobsPage() {
         due_date: string | null;
         due_time: string | null;
         description: string | null;
+        checklist_items?: unknown;
         task_assignees?: Array<{ user_id: string }> | null;
       }>) ?? [])
         .map((task) => ({
@@ -288,7 +666,8 @@ export default function JobsPage() {
           due_date: task.due_date ?? "",
           due_time: normalizeTimeValue(task.due_time),
           description: task.description ?? "",
-          assignee_id: task.task_assignees?.[0]?.user_id ?? ""
+          assignee_id: task.task_assignees?.[0]?.user_id ?? "",
+          checklist_items: normalizeTaskChecklistItems(task.checklist_items)
         }));
 
       setForm({
@@ -304,6 +683,7 @@ export default function JobsPage() {
         due_time: normalizeTimeValue(job.due_time),
         tasks: parsedTasks
       });
+      setTaskChecklistDrafts({});
 
       setRemovedTaskIds([]);
       setEditingSnapshot({
@@ -317,20 +697,29 @@ export default function JobsPage() {
           due_date: task.due_date,
           due_time: task.due_time,
           description: task.description,
-          assignee_id: task.assignee_id
+          assignee_id: task.assignee_id,
+          checklist_items: task.checklist_items
         }))
       });
+
+      await loadJobMedia(job.id);
     } catch (editError) {
       setError(editError instanceof Error ? editError.message : "Falha ao carregar tarefas do job.");
     }
   }
 
-  function resetForm() {
+  function resetForm(options?: { preserveCreatedSummary?: boolean }) {
     setForm(INITIAL_FORM);
     setRemovedTaskIds([]);
     setEditingSnapshot(null);
+    setJobMediaFiles([]);
+    clearPendingJobMediaFiles();
+    setTaskChecklistDrafts({});
     setGeneratingBriefing(false);
     setError("");
+    if (!options?.preserveCreatedSummary) {
+      setCreatedJobSummary(null);
+    }
   }
 
   function addTask() {
@@ -348,6 +737,17 @@ export default function JobsPage() {
   }
 
   function removeTask(taskIndex: number) {
+    const taskToRemove = form.tasks[taskIndex];
+    if (taskToRemove) {
+      const draftKey = getTaskChecklistDraftKey(taskToRemove, taskIndex);
+      setTaskChecklistDrafts((prev) => {
+        if (!(draftKey in prev)) return prev;
+        const next = { ...prev };
+        delete next[draftKey];
+        return next;
+      });
+    }
+
     setForm((prev) => {
       const task = prev.tasks[taskIndex];
       if (task?.id) {
@@ -359,6 +759,59 @@ export default function JobsPage() {
         tasks: prev.tasks.filter((_, index) => index !== taskIndex)
       };
     });
+  }
+
+  function getTaskChecklistDraftKey(task: JobTaskForm, index: number) {
+    return task.id ?? `new-${index}`;
+  }
+
+  function setChecklistDraft(task: JobTaskForm, index: number, value: string) {
+    const key = getTaskChecklistDraftKey(task, index);
+    setTaskChecklistDrafts((prev) => ({
+      ...prev,
+      [key]: value
+    }));
+  }
+
+  function addChecklistItem(taskIndex: number) {
+    const task = form.tasks[taskIndex];
+    if (!task) return;
+
+    const key = getTaskChecklistDraftKey(task, taskIndex);
+    const text = (taskChecklistDrafts[key] ?? "").trim();
+    if (!text) return;
+
+    updateTask(taskIndex, (current) => ({
+      ...current,
+      checklist_items: [...current.checklist_items, createTaskChecklistItem(text)]
+    }));
+
+    setTaskChecklistDrafts((prev) => ({
+      ...prev,
+      [key]: ""
+    }));
+  }
+
+  function toggleChecklistItem(taskIndex: number, itemId: string, done: boolean) {
+    updateTask(taskIndex, (current) => ({
+      ...current,
+      checklist_items: current.checklist_items.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              done,
+              completed_at: done ? new Date().toISOString() : null
+            }
+          : item
+      )
+    }));
+  }
+
+  function removeChecklistItem(taskIndex: number, itemId: string) {
+    updateTask(taskIndex, (current) => ({
+      ...current,
+      checklist_items: current.checklist_items.filter((item) => item.id !== itemId)
+    }));
   }
 
   async function syncJobTasks({
@@ -394,7 +847,7 @@ export default function JobsPage() {
     for (const [index, task] of tasks.entries()) {
       const resolvedTitle = resolveTaskTitle(task, index);
       const assigneeId = task.assignee_id || null;
-      const payload = {
+      const payload: Record<string, unknown> = {
         agency_id: agencyId,
         job_id: jobId,
         title: resolvedTitle,
@@ -404,6 +857,7 @@ export default function JobsPage() {
         due_date: task.due_date || null,
         due_time: task.due_time || null,
         description: task.description || null,
+        checklist_items: task.checklist_items,
         assigned_to: assigneeId,
         position: (index + 1) * 1000
       };
@@ -411,18 +865,52 @@ export default function JobsPage() {
       let resolvedTaskId = task.id;
 
       if (task.id) {
-        const { error: updateTaskError } = await supabase.from("tasks").update(payload).eq("id", task.id).eq("job_id", jobId);
-        if (updateTaskError) throw updateTaskError;
-      } else {
-        const { data: insertedTask, error: insertTaskError } = await supabase
-          .from("tasks")
-          .insert(payload)
-          .select("id")
-          .single();
+        const compatiblePayload = { ...payload };
 
-        if (insertTaskError || !insertedTask) throw insertTaskError;
-        resolvedTaskId = insertedTask.id;
-        summary.created.push(payload.title);
+        while (true) {
+          const { error: updateTaskError } = await supabase
+            .from("tasks")
+            .update(compatiblePayload)
+            .eq("id", task.id)
+            .eq("job_id", jobId);
+
+          if (!updateTaskError) break;
+
+          const missingColumn = extractMissingTaskColumn(updateTaskError.message);
+          if (missingColumn && missingColumn in compatiblePayload) {
+            delete compatiblePayload[missingColumn];
+            continue;
+          }
+
+          throw updateTaskError;
+        }
+      } else {
+        const compatiblePayload = { ...payload };
+        let insertedTaskId: string | null = null;
+
+        while (true) {
+          const { data: insertedTask, error: insertTaskError } = await supabase
+            .from("tasks")
+            .insert(compatiblePayload)
+            .select("id")
+            .single();
+
+          if (!insertTaskError && insertedTask) {
+            insertedTaskId = insertedTask.id;
+            break;
+          }
+
+          const missingColumn = insertTaskError ? extractMissingTaskColumn(insertTaskError.message) : null;
+          if (missingColumn && missingColumn in compatiblePayload) {
+            delete compatiblePayload[missingColumn];
+            continue;
+          }
+
+          throw insertTaskError ?? new Error("Falha ao inserir tarefa.");
+        }
+
+        resolvedTaskId = insertedTaskId;
+        summary.created.push(resolvedTitle);
       }
 
       if (!resolvedTaskId) continue;
@@ -456,26 +944,27 @@ export default function JobsPage() {
 
       if (previous) {
         const taskEdited =
-          previous.title !== payload.title ||
-          previous.priority !== payload.priority ||
-          previous.due_date !== (payload.due_date ?? "") ||
-          previous.due_time !== (payload.due_time ?? "") ||
-          previous.description !== (payload.description ?? "");
+          previous.title !== resolvedTitle ||
+          previous.priority !== task.priority ||
+          previous.due_date !== (task.due_date || "") ||
+          previous.due_time !== (task.due_time || "") ||
+          previous.description !== (task.description || "") ||
+          JSON.stringify(previous.checklist_items) !== JSON.stringify(task.checklist_items);
 
         if (taskEdited) {
-          summary.edited.push(payload.title);
+          summary.edited.push(resolvedTitle);
         }
       }
 
-      if (previous && previous.status !== payload.status) {
-        summary.statusChanged.push({ title: payload.title, from: previous.status, to: payload.status });
-        if (previous.status !== "concluido" && payload.status === "concluido") {
-          summary.completed.push(payload.title);
+      if (previous && previous.status !== task.status) {
+        summary.statusChanged.push({ title: resolvedTitle, from: previous.status, to: task.status });
+        if (previous.status !== "concluido" && task.status === "concluido") {
+          summary.completed.push(resolvedTitle);
         }
       }
 
       if (previousAssignee !== (assigneeId ?? "")) {
-        summary.assigneesChanged.push(payload.title);
+        summary.assigneesChanged.push(resolvedTitle);
       }
     }
 
@@ -614,13 +1103,18 @@ export default function JobsPage() {
       setSaving(true);
       setError("");
       setSuccess("");
+      setCreatedJobSummary(null);
 
       const supabase = createBrowserSupabaseClient();
+      const pendingFilesToUpload = pendingJobMediaFiles.map((file) => file.file);
+      let createdJobSuccessTitle: string | null = null;
+      let createdJobSuccessMessage: string | null = null;
 
       const normalizedTasks = form.tasks.map((task, index) => ({
         ...task,
         title: resolveTaskTitle(task, index),
-        assignee_id: task.assignee_id
+        assignee_id: task.assignee_id,
+        checklist_items: normalizeTaskChecklistItems(task.checklist_items)
       }));
 
       const hasNewTasks = normalizedTasks.some((task) => !task.id);
@@ -647,6 +1141,8 @@ export default function JobsPage() {
         due_date: form.due_date || null,
         due_time: form.due_time || null
       };
+
+      let createdJobId: string | null = null;
 
       if (form.id) {
         const { error: updateError } = await supabase.from("jobs").update(payload).eq("id", form.id);
@@ -764,24 +1260,56 @@ export default function JobsPage() {
               due_date: task.due_date || null,
               due_time: task.due_time || null,
               description: task.description || null,
+              checklist_items: task.checklist_items,
               assignee_ids: task.assignee_id ? [task.assignee_id] : []
             }))
           })
         });
 
-        const result = (await response.json()) as { error?: string; warning?: string; jobCode?: string };
+        const result = (await response.json()) as { error?: string; warning?: string; jobCode?: string; jobId?: string };
 
         if (!response.ok) {
           throw new Error(result.error ?? "Falha ao criar job.");
         }
 
-        if (result.warning) {
-          setSuccess(result.warning);
-        } else if (result.jobCode) {
-          setSuccess(`Job criado com sucesso (${result.jobCode}).`);
-        } else {
-          setSuccess("Job criado com sucesso.");
+        createdJobSuccessTitle = result.jobCode ? `Job ${result.jobCode} criado com sucesso` : "Job criado com sucesso";
+        createdJobSuccessMessage = result.warning
+          ? result.warning
+          : result.jobCode
+            ? `O job ${result.jobCode} foi criado com sucesso.`
+            : "O job foi criado com sucesso.";
+
+        createdJobId = result.jobId ?? null;
+      }
+
+      if (createdJobId) {
+        let finalSuccessMessage = createdJobSuccessMessage ?? "O job foi criado com sucesso.";
+
+        if (pendingFilesToUpload.length > 0) {
+          try {
+            const uploadedCount = await uploadMediaFilesToJob({
+              files: pendingFilesToUpload,
+              jobId: createdJobId
+            });
+
+            finalSuccessMessage = `${finalSuccessMessage} ${formatAttachmentUploadSuccess(uploadedCount)}`;
+            clearPendingJobMediaFiles();
+          } catch (mediaUploadError) {
+            finalSuccessMessage = `${finalSuccessMessage} ${
+              mediaUploadError instanceof Error
+                ? `Job criado, mas houve falha ao anexar a mídia: ${mediaUploadError.message}`
+                : "Job criado, mas houve falha ao anexar a mídia."
+            }`;
+          }
         }
+
+        setCreatedJobSummary({
+          title: createdJobSuccessTitle ?? "Job criado com sucesso",
+          message: finalSuccessMessage
+        });
+        resetForm({ preserveCreatedSummary: true });
+        await loadData();
+        return;
       }
 
       resetForm();
@@ -817,6 +1345,23 @@ export default function JobsPage() {
             <h2 className="text-base font-semibold">{isEditing ? "Editar job" : "Novo job"}</h2>
           </CardHeader>
           <CardContent>
+            {createdJobSummary ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 md:p-8">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-2xl font-semibold text-emerald-800 md:text-3xl">{createdJobSummary.title}</p>
+                    <p className="mt-3 max-w-3xl text-sm text-emerald-900/80 md:text-base">{createdJobSummary.message}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => resetForm()}
+                    className="inline-flex items-center justify-center whitespace-nowrap"
+                  >
+                    + Novo Job
+                  </Button>
+                </div>
+              </div>
+            ) : (
             <form className="grid gap-3 md:grid-cols-2" onSubmit={handleSubmit}>
             <div>
               <label className="mb-1 block text-xs font-medium text-muted">Título</label>
@@ -927,6 +1472,169 @@ export default function JobsPage() {
 
             <div className="md:col-span-2 rounded-xl border border-border p-3">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">Mídias do Job</h3>
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={mediaInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(event) => {
+                      void handleMediaInputChange(event);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="inline-flex items-center gap-2"
+                    onClick={() => mediaInputRef.current?.click()}
+                    disabled={uploadingJobMedia || saving || !isAdmin || readOnlyMode}
+                  >
+                    <Upload className="h-4 w-4" />
+                    {uploadingJobMedia ? "Anexando..." : "Anexar arquivos"}
+                  </Button>
+                </div>
+              </div>
+
+              {!form.id ? (
+                <p className="text-xs text-muted">
+                  Você já pode anexar os arquivos agora. Eles serão enviados automaticamente ao salvar o job.
+                </p>
+              ) : null}
+
+              {form.id && loadingJobMedia ? (
+                <p className="text-sm text-muted">Carregando anexos...</p>
+              ) : null}
+
+              {!form.id && pendingJobMediaFiles.length === 0 ? (
+                <p className="text-sm text-muted">Nenhum arquivo selecionado para este novo job.</p>
+              ) : null}
+
+              {!form.id && pendingJobMediaFiles.length > 0 ? (
+                <div className="space-y-2">
+                  {pendingJobMediaFiles.map((file) => (
+                    <div
+                      key={file.localId}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-panelAlt px-3 py-2"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-border bg-white">
+                          {file.isImage && file.previewUrl ? (
+                            <img src={file.previewUrl} alt={file.file_name} className="h-full w-full object-cover" />
+                          ) : file.isVideo ? (
+                            <div className="flex h-full w-full items-center justify-center text-muted">
+                              <Video className="h-5 w-5" />
+                            </div>
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-muted">
+                              <File className="h-5 w-5" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-text">{file.file_name}</p>
+                          <p className="text-xs text-muted">
+                            Pronto para envio • {formatFileSize(file.size_bytes)} • Selecionado em{" "}
+                            {formatMediaAddedAt(file.created_at)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="danger"
+                        size="sm"
+                        className="inline-flex items-center gap-1"
+                        disabled={!isAdmin || readOnlyMode}
+                        onClick={() => removePendingJobMedia(file.localId)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Remover
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {form.id && !loadingJobMedia && jobMediaFiles.length === 0 ? (
+                <p className="text-sm text-muted">Nenhum arquivo anexado neste job.</p>
+              ) : null}
+
+              {form.id && jobMediaFiles.length > 0 ? (
+                <div className="space-y-2">
+                  {jobMediaFiles.map((file) => (
+                    <div
+                      key={file.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-panelAlt px-3 py-2"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-border bg-white">
+                          {file.isImage && file.previewUrl ? (
+                            <img
+                              src={file.previewUrl}
+                              alt={file.file_name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : file.isVideo ? (
+                            <div className="flex h-full w-full items-center justify-center text-muted">
+                              <Video className="h-5 w-5" />
+                            </div>
+                          ) : file.mime_type?.includes("pdf") ? (
+                            <div className="flex h-full w-full items-center justify-center text-muted">
+                              <File className="h-5 w-5" />
+                            </div>
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-muted">
+                              <File className="h-5 w-5" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-text">{file.file_name}</p>
+                          <p className="text-xs text-muted">
+                            Adicionado em {formatMediaAddedAt(file.created_at)} • {formatFileSize(file.size_bytes)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="inline-flex items-center gap-1"
+                          onClick={() => {
+                            void openMediaDownload(file);
+                          }}
+                        >
+                          <FileDown className="h-4 w-4" />
+                          Download
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          className="inline-flex items-center gap-1"
+                          disabled={!isAdmin || deletingMediaId === file.id || readOnlyMode}
+                          onClick={() => {
+                            void handleDeleteMedia(file);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          {deletingMediaId === file.id ? "Apagando..." : "Apagar"}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="md:col-span-2 rounded-xl border border-border p-3">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold">Tarefas do Job</h3>
                 <Button
                   type="button"
@@ -946,8 +1654,13 @@ export default function JobsPage() {
                 <p className="text-sm text-muted">Nenhuma tarefa adicionada neste job.</p>
               ) : (
                 <div className="space-y-4">
-                  {form.tasks.map((task, index) => (
-                    <div key={task.id ?? `new-${index}`} className="rounded-xl border border-border/70 bg-panelAlt p-3">
+                  {form.tasks.map((task, index) => {
+                    const checklistProgress = getTaskChecklistProgress(task.checklist_items);
+                    const taskDraftKey = getTaskChecklistDraftKey(task, index);
+                    const checklistDraft = taskChecklistDrafts[taskDraftKey] ?? "";
+
+                    return (
+                      <div key={task.id ?? `new-${index}`} className="rounded-xl border border-border/70 bg-panelAlt p-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Tarefa {index + 1}</p>
                         <Button type="button" variant="danger" size="sm" onClick={() => removeTask(index)}>
@@ -1022,9 +1735,90 @@ export default function JobsPage() {
                             onChange={(e) => updateTask(index, (current) => ({ ...current, description: e.target.value }))}
                           />
                         </div>
+
+                        <div className="md:col-span-2 lg:col-span-4 rounded-xl border border-border/70 bg-white p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Checklist da tarefa</p>
+                            <p className="text-xs font-semibold text-muted">
+                              {checklistProgress.completed}/{checklistProgress.total} concluídos • {checklistProgress.percent}%
+                            </p>
+                          </div>
+
+                          <div className="mt-2 h-2 w-full rounded-full bg-border/70">
+                            <span
+                              className="block h-2 rounded-full bg-brand transition-all duration-200"
+                              style={{ width: `${checklistProgress.percent}%` }}
+                            />
+                          </div>
+
+                          {task.checklist_items.length === 0 ? (
+                            <p className="mt-3 text-xs text-muted">Nenhum item adicionado ainda.</p>
+                          ) : (
+                            <div className="mt-3 space-y-2">
+                              {task.checklist_items.map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-panel px-3 py-2"
+                                >
+                                  <label className="flex min-w-0 flex-1 items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={item.done}
+                                      onChange={(event) => {
+                                        toggleChecklistItem(index, item.id, event.target.checked);
+                                      }}
+                                      className="h-4 w-4 shrink-0 accent-[hsl(var(--brand))]"
+                                    />
+                                    <span
+                                      className={cn(
+                                        "truncate text-sm text-text",
+                                        item.done ? "text-muted line-through decoration-2" : ""
+                                      )}
+                                    >
+                                      {item.text}
+                                    </span>
+                                  </label>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 px-2.5 text-xs text-muted hover:text-danger"
+                                    onClick={() => removeChecklistItem(index, item.id)}
+                                  >
+                                    Remover
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                            <Input
+                              value={checklistDraft}
+                              onChange={(event) => setChecklistDraft(task, index, event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  addChecklistItem(index);
+                                }
+                              }}
+                              placeholder="Adicionar item de checklist"
+                            />
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              className="sm:min-w-[132px]"
+                              onClick={() => addChecklistItem(index)}
+                            >
+                              Adicionar item
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1046,6 +1840,7 @@ export default function JobsPage() {
               ) : null}
             </div>
             </form>
+            )}
           </CardContent>
         </Card>
       ) : null}
