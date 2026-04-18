@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { LoginFormCard } from "@/components/auth/login-form-card";
 import { BrifaFavicon } from "@/components/layout/brifa-favicon";
 import { resolvePlatformPath } from "@/lib/agency-routing";
+import { resolveProfileHomePath } from "@/lib/auth";
 import type { UserProfile } from "@/lib/database.types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -28,9 +29,13 @@ export default async function HomePage({
   } = await supabase.auth.getUser();
 
   if (user) {
-    const { data } = await supabase.from("users").select("platform_role").eq("id", user.id).maybeSingle();
-    const profile = data as Pick<UserProfile, "platform_role"> | null;
-    redirect(profile?.platform_role === "super_admin" ? resolvePlatformPath() : "/dashboard");
+    const { data } = await supabase.from("users").select("platform_role, agency_id").eq("id", user.id).maybeSingle();
+    const profile = data as Pick<UserProfile, "platform_role" | "agency_id"> | null;
+    if (!profile) {
+      redirect("/login?error=profile_not_found");
+    }
+
+    redirect(await resolveProfileHomePath(profile));
   }
 
   const helperError = resolveRouteErrorMessage(searchParams.error ?? null);

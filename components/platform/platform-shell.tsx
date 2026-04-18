@@ -48,11 +48,13 @@ const pageTitleMap: Record<string, string> = {
 export function PlatformShell({
   children,
   profileName,
-  profileEmail
+  profileEmail,
+  agencyHomePath
 }: {
   children: React.ReactNode;
   profileName: string;
   profileEmail: string;
+  agencyHomePath: string;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -150,7 +152,7 @@ export function PlatformShell({
 
         <div className="border-t border-border/80 bg-panelAlt/55 px-4 py-4">
           <Link
-            href="/dashboard"
+            href={agencyHomePath}
             className="flex items-center gap-3 rounded-[22px] border border-border bg-panelAlt/60 px-3 py-3 text-sm text-muted transition hover:bg-panelAlt"
           >
             <ArrowLeft className="h-4 w-4" />

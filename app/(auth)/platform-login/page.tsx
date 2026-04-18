@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { LoginFormCard } from "@/components/auth/login-form-card";
 import { BrifaFavicon } from "@/components/layout/brifa-favicon";
-import { resolveAgencyAppPath, resolvePlatformPath } from "@/lib/agency-routing";
+import { resolvePlatformPath } from "@/lib/agency-routing";
+import { resolveProfileHomePath } from "@/lib/auth";
 import type { UserProfile } from "@/lib/database.types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -33,16 +34,15 @@ export default async function PlatformLoginPage({
     const { data } = await supabase.from("users").select("platform_role, agency_id").eq("id", user.id).maybeSingle();
     const profile = data as Pick<UserProfile, "platform_role" | "agency_id"> | null;
 
-    if (profile?.platform_role === "super_admin") {
+    if (!profile) {
+      redirect("/login?error=profile_not_found");
+    }
+
+    if (profile.platform_role === "super_admin") {
       redirect(next);
     }
 
-    if (profile?.agency_id) {
-      const { data: agency } = await supabase.from("agencies").select("slug").eq("id", profile.agency_id).maybeSingle();
-      redirect(resolveAgencyAppPath(agency?.slug ?? null) ?? "/dashboard");
-    }
-
-    redirect("/dashboard");
+    redirect(await resolveProfileHomePath(profile));
   }
 
   const helperError = resolveRouteErrorMessage(searchParams.error ?? null);

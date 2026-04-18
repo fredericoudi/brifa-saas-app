@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
+import { resolveAgencyAppPath, resolvePlatformPath } from "@/lib/agency-routing";
 import type { UserProfile } from "@/lib/database.types";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -40,11 +41,26 @@ export async function requireAuth() {
   return context as { user: User; profile: UserProfile };
 }
 
+export async function resolveProfileHomePath(profile: Pick<UserProfile, "platform_role" | "agency_id">) {
+  if (profile.platform_role === "super_admin") {
+    return resolvePlatformPath();
+  }
+
+  if (!profile.agency_id) {
+    return "/login?error=agency_not_found";
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data: agency } = await supabase.from("agencies").select("slug").eq("id", profile.agency_id).maybeSingle();
+
+  return resolveAgencyAppPath(agency?.slug ?? null) ?? "/login?error=agency_not_found";
+}
+
 export async function requireSuperAdmin() {
   const context = await requireAuth();
 
   if (context.profile.platform_role !== "super_admin") {
-    redirect("/dashboard");
+    redirect(await resolveProfileHomePath(context.profile));
   }
 
   return context as { user: User; profile: UserProfile & { platform_role: "super_admin" } };

@@ -9,6 +9,7 @@ import { LoginFormCard } from "@/components/auth/login-form-card";
 import { BrifaFavicon } from "@/components/layout/brifa-favicon";
 import { AgencyMark } from "@/components/layout/agency-mark";
 import { resolveAgencyAppPath, resolvePlatformLoginPath } from "@/lib/agency-routing";
+import { resolveProfileHomePath } from "@/lib/auth";
 import type { Agency, UserProfile } from "@/lib/database.types";
 import { getAgencyBrandStyleVars } from "@/lib/agency-branding";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
@@ -46,13 +47,7 @@ export default async function AgencyAccessPage({ params }: { params: { slug: str
     }
 
     if (!isSuperAdminPreview) {
-      const { data: ownAgency } = await supabase
-        .from("agencies")
-        .select("slug")
-        .eq("id", profile?.agency_id ?? "")
-        .maybeSingle();
-
-      redirect(resolveAgencyAppPath(ownAgency?.slug ?? null) ?? "/dashboard");
+      redirect(await resolveProfileHomePath(profile));
     }
   }
 

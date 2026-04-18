@@ -1,13 +1,5 @@
-import { redirect } from "next/navigation";
-import { resolvePlatformPath } from "@/lib/agency-routing";
-import { requireAuth } from "@/lib/auth";
+import { redirectLegacyAgencyRoute } from "@/features/agency-panel/server/legacy-route-redirect";
 
-export default async function ConversationsPage() {
-  const { profile } = await requireAuth();
-
-  if (profile.platform_role === "super_admin") {
-    redirect(resolvePlatformPath("/conversations"));
-  }
-
-  redirect("/dashboard");
+export default async function ConversationsLegacyRoutePage() {
+  await redirectLegacyAgencyRoute("/dashboard");
 }

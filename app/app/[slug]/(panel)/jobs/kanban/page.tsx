@@ -1,1 +1,1 @@
-export { default } from "@/app/(app)/jobs/kanban/page";
+export { default } from "@/features/agency-panel/pages/jobs/kanban/page";

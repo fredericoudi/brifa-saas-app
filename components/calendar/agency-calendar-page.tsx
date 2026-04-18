@@ -282,7 +282,7 @@ export function AgencyCalendarPage({
     }
 
     return map;
-  }, [calendarWindowDays, filteredTasks, timeSlots]);
+  }, [calendarWindowDays, filteredTasks]);
 
   const summaryTasks = useMemo(() => {
     if (viewMode === "daily") {

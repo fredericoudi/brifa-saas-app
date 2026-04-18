@@ -1,1 +1,1 @@
-export { default } from "@/app/(app)/tasks/page";
+export { default } from "@/features/agency-panel/pages/tasks/page";
