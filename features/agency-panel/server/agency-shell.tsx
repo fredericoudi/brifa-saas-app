@@ -3,6 +3,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { resolveAgencyPortalPath } from "@/lib/agency-routing";
 import { requireAuth, resolveProfileHomePath } from "@/lib/auth";
 import type { Agency, UserProfile } from "@/lib/database.types";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 type AgencyShellAgency = Pick<Agency, "id" | "name" | "slug" | "status" | "logo_url" | "brand_color" | "updated_at">;
 
