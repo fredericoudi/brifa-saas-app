@@ -51,11 +51,18 @@ export function UserMenu({
         onClick={() => setOpen((prev) => !prev)}
         aria-label="Menu do usuário"
       >
-        <div className="min-w-0 text-left">
+        <UserAvatar
+          name={profileName}
+          avatarUrl={profileAvatarUrl}
+          updatedAt={profileUpdatedAt}
+          className="h-12 w-12 border-border/80 bg-brandMuted text-sm"
+          fallbackClassName="text-sm"
+        />
+        <div className="hidden min-w-0 text-left lg:block">
           <p className="truncate text-sm font-semibold leading-none text-text">{profileName}</p>
           <p className="mt-1 truncate text-xs text-muted">{roleLabel}</p>
         </div>
-        <ChevronDown className={cn("h-4 w-4 transition", open ? "rotate-180" : "rotate-0")} />
+        <ChevronDown className={cn("hidden h-4 w-4 transition lg:block", open ? "rotate-180" : "rotate-0")} />
       </button>
 
       {open ? (

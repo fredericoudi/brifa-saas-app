@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, CalendarDays } from "lucide-react";
 import { TrialActivationCard } from "@/components/commercial/trial-activation-card";
+import { TeamLoadCardCarousel } from "@/components/dashboard/team-load-card-carousel";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { requireAuth } from "@/lib/auth";
@@ -136,69 +137,6 @@ function DashboardMetricCard({
   );
 }
 
-function TeamLoadCard({
-  highlightedLoad
-}: {
-  highlightedLoad: Array<{
-    id: string;
-    name: string;
-    activeHours: number;
-    capacity: number;
-    percent: number;
-  }>;
-}) {
-  const lead = highlightedLoad[0] ?? null;
-
-  return (
-    <Card className="min-h-[308px] rounded-[28px] border-0 shadow-[0_18px_34px_-28px_rgba(15,23,42,0.42)]">
-      <CardHeader className="relative z-10 border-b-0 bg-panel shadow-[0_10px_14px_-14px_rgba(15,23,42,0.34)]">
-        <h2 className="text-[1.35rem] font-semibold tracking-tight text-text">Carga da Equipe</h2>
-      </CardHeader>
-      <CardContent className="pt-4">
-        {!lead ? (
-          <p className="text-sm text-muted">Nenhum membro encontrado.</p>
-        ) : (
-          <div className="space-y-5">
-            <p className="text-sm font-semibold text-text">{lead.name}</p>
-
-            <div className="flex justify-center">
-              <div
-                className="grid h-40 w-40 place-items-center rounded-full"
-                style={{
-                  background: `conic-gradient(#56c7ee 0deg ${Math.max(lead.percent * 1.25, 40)}deg, hsl(var(--brand)) ${Math.max(
-                    lead.percent * 1.25,
-                    40
-                  )}deg ${lead.percent * 3.6}deg, #e7eefc ${lead.percent * 3.6}deg 360deg)`
-                }}
-              >
-                <div className="grid h-28 w-28 place-items-center rounded-full bg-panel">
-                  <p className="text-[1.7rem] font-semibold tracking-tight text-text">{lead.percent}%</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-1 text-center text-xs text-muted">
-              <p>{lead.activeHours} horas planejadas</p>
-              <p>{lead.capacity} horas de capacidade semanal</p>
-            </div>
-
-            {highlightedLoad.length > 1 ? (
-              <div className="space-y-2">
-                {highlightedLoad.slice(1).map((member) => (
-                  <div key={member.id} className="flex items-center justify-between gap-3 rounded-2xl bg-panelAlt/55 px-3 py-2.5">
-                    <p className="truncate text-sm font-medium text-text">{member.name}</p>
-                    <p className="text-xs font-semibold text-muted">{member.percent}%</p>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 function ClientLineChart({ values }: { values: number[] }) {
   const width = 280;
   const height = 110;
@@ -310,11 +248,14 @@ function DashboardTasksCard({
       </CardHeader>
       <CardContent className="space-y-0 px-0 py-0">
         {preview.length === 0 ? (
-          <p className="px-6 py-6 text-sm text-muted">Nenhuma tarefa em andamento.</p>
+          <p className="px-5 py-6 text-sm text-muted md:px-0">Nenhuma tarefa em andamento.</p>
         ) : (
           preview.map((task, index) => {
             return (
-              <div key={task.id} className={cn("space-y-3 px-6 py-5", index > 0 ? "border-t border-[#ececec]" : "")}>
+              <div
+                key={task.id}
+                className={cn("space-y-3 px-5 py-5 md:px-0", index > 0 ? "border-t border-[#ececec]" : "")}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <p className="text-[11px] font-semibold text-brand">{task.jobCode}</p>
@@ -373,7 +314,7 @@ function DashboardTasksCard({
           })
         )}
 
-        <div className="border-t border-[#ececec] px-6 py-5">
+        <div className="border-t border-[#ececec] px-5 py-5 md:px-0">
           <Link
             href="tasks"
             className="inline-flex h-12 w-full items-center justify-center rounded-[18px] bg-brandMuted font-semibold text-brand transition hover:brightness-[0.98]"
@@ -430,10 +371,13 @@ function DashboardJobsCard({
       </CardHeader>
       <CardContent className="space-y-0 px-0 py-0">
         {preview.length === 0 ? (
-          <p className="px-6 py-6 text-sm text-muted">Nenhum job ativo no momento.</p>
+          <p className="px-5 py-6 text-sm text-muted md:px-0">Nenhum job ativo no momento.</p>
         ) : (
           preview.map((job, index) => (
-            <div key={job.id} className={cn("space-y-3 px-6 py-5", index > 0 ? "border-t border-[#ececec]" : "")}>
+            <div
+              key={job.id}
+              className={cn("space-y-3 px-5 py-5 md:px-0", index > 0 ? "border-t border-[#ececec]" : "")}
+            >
               <div className="space-y-1">
                 <p className="text-[11px] font-semibold text-brand">{job.client?.name ?? "Cliente não informado"}</p>
                 <p className="text-sm font-semibold text-text">{job.title}</p>
@@ -467,7 +411,7 @@ function DashboardJobsCard({
           ))
         )}
 
-        <div className="border-t border-[#ececec] px-6 py-5">
+        <div className="border-t border-[#ececec] px-5 py-5 md:px-0">
           <Link
             href="jobs"
             className="inline-flex h-12 w-full items-center justify-center rounded-[18px] bg-brandMuted font-semibold text-brand transition hover:brightness-[0.98]"
@@ -671,7 +615,7 @@ export default async function DashboardPage() {
   ] as const;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pt-[20px]">
       {canManageTrial && !commercialContext.trial.activated ? <TrialActivationCard /> : null}
 
       <section className="grid gap-5 xl:grid-cols-4">
@@ -689,7 +633,7 @@ export default async function DashboardPage() {
           </section>
 
           <section className="grid gap-5 xl:grid-cols-2">
-            <TeamLoadCard highlightedLoad={highlightedLoad} />
+            <TeamLoadCardCarousel highlightedLoad={highlightedLoad} />
             <NewClientsCard clientsByMonth={clientsByMonth} totalClients={clients.length} />
           </section>
         </div>
@@ -701,13 +645,13 @@ export default async function DashboardPage() {
       <section className="grid gap-4 xl:hidden">
         <Card className="rounded-[28px]">
           <CardContent className="flex items-center justify-between gap-3 p-5">
-            <div>
+            <div className="min-w-0 max-w-[56%]">
               <p className="text-sm font-semibold text-text">Operação da agência</p>
               <p className="mt-1 text-sm text-muted">Acesse rapidamente as áreas com maior volume hoje.</p>
             </div>
             <Link
               href="jobs"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-[18px] bg-brand px-4 text-sm font-semibold text-white"
+              className="inline-flex h-11 min-w-[124px] shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-[18px] bg-brand px-4 text-sm font-semibold text-white"
             >
               Ver jobs
               <ArrowRight className="h-4 w-4" />

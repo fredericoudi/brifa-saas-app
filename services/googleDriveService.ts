@@ -1,14 +1,7 @@
 const GOOGLE_DRIVE_FILES_ENDPOINT = "https://www.googleapis.com/drive/v3/files";
 const GOOGLE_OAUTH_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const GOOGLE_DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
-
-export const DEFAULT_JOB_SUBFOLDERS = [
-  "01_Briefing",
-  "02_Referencias",
-  "03_Criacao",
-  "04_Revisoes",
-  "05_Finais"
-] as const;
+const DEFAULT_DRIVE_TIMEZONE = "America/Sao_Paulo";
 
 type GoogleTokenPayload = {
   access_token: string;
@@ -38,6 +31,100 @@ async function parseGoogleError(response: Response) {
   } catch {
     return fallback;
   }
+}
+
+function escapeDriveQueryValue(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+function sanitizeDriveFolderName(value: string) {
+  return value
+    .replace(/[\\/:*?"<>|]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function resolveDriveTimeZone(value?: string | null) {
+  if (!value) {
+    return DEFAULT_DRIVE_TIMEZONE;
+  }
+
+  try {
+    Intl.DateTimeFormat("pt-BR", { timeZone: value }).format(new Date());
+    return value;
+  } catch {
+    return DEFAULT_DRIVE_TIMEZONE;
+  }
+}
+
+function resolveDriveYearFolderName(timeZone?: string | null) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: resolveDriveTimeZone(timeZone),
+    year: "numeric"
+  });
+
+  return formatter.format(new Date());
+}
+
+async function findDriveFolderByName({
+  accessToken,
+  name,
+  parentFolderId
+}: {
+  accessToken: string;
+  name: string;
+  parentFolderId: string;
+}) {
+  const query = [
+    `mimeType='${GOOGLE_DRIVE_FOLDER_MIME_TYPE}'`,
+    `name='${escapeDriveQueryValue(name)}'`,
+    `'${escapeDriveQueryValue(parentFolderId)}' in parents`,
+    "trashed=false"
+  ].join(" and ");
+
+  const response = await fetch(
+    `${GOOGLE_DRIVE_FILES_ENDPOINT}?q=${encodeURIComponent(query)}&fields=files(id,name,webViewLink,mimeType)&pageSize=1`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseGoogleError(response));
+  }
+
+  const payload = (await response.json()) as { files?: DriveFolder[] };
+  return payload.files?.[0] ?? null;
+}
+
+async function getOrCreateDriveFolder({
+  accessToken,
+  name,
+  parentFolderId
+}: {
+  accessToken: string;
+  name: string;
+  parentFolderId: string;
+}) {
+  const sanitizedFolderName = sanitizeDriveFolderName(name);
+  const existingFolder = await findDriveFolderByName({
+    accessToken,
+    name: sanitizedFolderName,
+    parentFolderId
+  });
+
+  if (existingFolder) {
+    return existingFolder;
+  }
+
+  return createDriveFolder({
+    accessToken,
+    name: sanitizedFolderName,
+    parentFolderId
+  });
 }
 
 async function createDriveFolder({
@@ -73,48 +160,39 @@ export function getFolderLink(folderId: string) {
   return `https://drive.google.com/drive/folders/${folderId}`;
 }
 
-export async function createSubfolders({
-  accessToken,
-  parentFolderId,
-  folderNames = [...DEFAULT_JOB_SUBFOLDERS]
-}: {
-  accessToken: string;
-  parentFolderId: string;
-  folderNames?: string[];
-}) {
-  const created: DriveFolder[] = [];
-
-  for (const folderName of folderNames) {
-    const folder = await createDriveFolder({
-      accessToken,
-      name: folderName,
-      parentFolderId
-    });
-    created.push(folder);
-  }
-
-  return created;
-}
-
 export async function createJobFolder({
   accessToken,
   rootFolderId,
-  jobCode
+  clientName,
+  clientPrefix,
+  jobCode,
+  jobTitle,
+  agencyTimeZone
 }: {
   accessToken: string;
   rootFolderId: string;
+  clientName: string;
+  clientPrefix: string;
   jobCode: string;
+  jobTitle: string;
+  agencyTimeZone?: string | null;
 }) {
-  const mainFolder = await createDriveFolder({
+  const yearFolder = await getOrCreateDriveFolder({
     accessToken,
-    name: jobCode,
+    name: resolveDriveYearFolderName(agencyTimeZone),
     parentFolderId: rootFolderId
   });
 
-  await createSubfolders({
+  const clientFolder = await getOrCreateDriveFolder({
     accessToken,
-    parentFolderId: mainFolder.id,
-    folderNames: [...DEFAULT_JOB_SUBFOLDERS]
+    name: `${clientPrefix}-${clientName}`,
+    parentFolderId: yearFolder.id
+  });
+
+  const mainFolder = await getOrCreateDriveFolder({
+    accessToken,
+    name: `${jobCode} - ${jobTitle}`,
+    parentFolderId: clientFolder.id
   });
 
   return {

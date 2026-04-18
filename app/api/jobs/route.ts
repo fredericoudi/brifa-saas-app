@@ -35,6 +35,7 @@ const createTaskSchema = z.object({
 
 const createJobSchema = z.object({
   client_id: z.string().uuid(),
+  agency_time_zone: z.string().trim().min(1).max(120).optional().nullable(),
   title: z.string().trim().min(1).max(180),
   client_need: z.string().trim().max(12000).optional().nullable(),
   description: z.string().trim().max(12000).optional().nullable(),
@@ -583,7 +584,11 @@ export async function POST(request: Request) {
           const folder = await createJobFolder({
             accessToken: refreshed.accessToken,
             rootFolderId: integration.root_folder_id,
-            jobCode: createdJob.job_code ?? "JOB"
+            clientName: client.name,
+            clientPrefix,
+            jobCode: createdJob.job_code ?? "JOB",
+            jobTitle: parsed.data.title,
+            agencyTimeZone: parsed.data.agency_time_zone
           });
 
           driveFolderUrl = folder.folderUrl;

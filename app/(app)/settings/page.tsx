@@ -14,6 +14,7 @@ import {
   COMMERCIAL_STATUS_LABEL,
   COMMERCIAL_STATUS_VARIANT,
   formatPlanLimit,
+  resolveNextUpgradePlanCode,
   type AgencyCommercialContext
 } from "@/lib/commercial";
 import type { Agency, AgencyIntegration, Database, UserProfile } from "@/lib/database.types";
@@ -34,6 +35,7 @@ export default function SettingsPage() {
   const [savingAgency, setSavingAgency] = useState(false);
   const [savingDrive, setSavingDrive] = useState(false);
   const [cancelingSubscription, setCancelingSubscription] = useState(false);
+  const [startingUpgrade, setStartingUpgrade] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -49,7 +51,6 @@ export default function SettingsPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
   const [rootFolderId, setRootFolderId] = useState("");
-  const [showUpgradeHint, setShowUpgradeHint] = useState(false);
 
   const isAdmin = useMemo(() => profile?.role === "admin", [profile?.role]);
   const displayedLogoUrl = logoPreviewUrl ?? agencyLogoUrl;
@@ -60,6 +61,15 @@ export default function SettingsPage() {
     commercialContext?.subscription.payment_provider === "asaas" &&
     !!commercialContext.subscription.external_subscription_id &&
     commercialContext.subscription.status !== "canceled";
+  const nextUpgradePlanCode = useMemo(
+    () => resolveNextUpgradePlanCode(commercialContext?.plan.code),
+    [commercialContext?.plan.code]
+  );
+  const nextUpgradePlanLabel = useMemo(() => {
+    if (nextUpgradePlanCode === "pro") return "Pro";
+    if (nextUpgradePlanCode === "agency") return "Agency";
+    return null;
+  }, [nextUpgradePlanCode]);
 
   async function loadData() {
     setError("");
@@ -186,10 +196,21 @@ export default function SettingsPage() {
   useEffect(() => {
     const successParam = searchParams.get("success");
     const errorParam = searchParams.get("error");
+    const upgradeParam = searchParams.get("upgrade");
 
     if (successParam === "google_drive_connected") {
       setSuccess("Google Drive conectado com sucesso.");
       setError("");
+    }
+
+    if (upgradeParam === "processing") {
+      setSuccess("Recebemos sua solicitação de upgrade. Assim que o pagamento for confirmado, o novo plano será liberado automaticamente.");
+      setError("");
+    }
+
+    if (upgradeParam === "canceled") {
+      setError("O checkout de upgrade foi cancelado. Você pode tentar novamente quando quiser.");
+      setSuccess("");
     }
 
     if (errorParam) {
@@ -401,6 +422,38 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleUpgradeSubscription() {
+    if (!isAdmin || !nextUpgradePlanCode) return;
+
+    try {
+      setStartingUpgrade(true);
+      setError("");
+      setSuccess("");
+
+      const response = await fetch("/api/subscription/upgrade", {
+        method: "POST"
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            error?: string;
+            checkoutUrl?: string;
+            targetPlanName?: string;
+          }
+        | null;
+
+      if (!response.ok || !payload?.checkoutUrl) {
+        throw new Error(payload?.error ?? "Não foi possível iniciar o upgrade do plano.");
+      }
+
+      window.location.assign(payload.checkoutUrl);
+    } catch (upgradeError) {
+      setError(upgradeError instanceof Error ? upgradeError.message : "Não foi possível iniciar o upgrade do plano.");
+    } finally {
+      setStartingUpgrade(false);
+    }
+  }
+
   async function validateSquareLogo(file: File) {
     const objectUrl = URL.createObjectURL(file);
 
@@ -496,10 +549,10 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <form className="grid gap-4 md:grid-cols-2" onSubmit={saveProfile}>
-            <div className="md:col-span-2 grid gap-4 lg:grid-cols-[220px_1fr]">
+            <div className="md:col-span-2 grid items-center gap-4 lg:grid-cols-[440px_1fr]">
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted">Foto de perfil</label>
-                <div className="max-w-[360px] rounded-[34px] border border-border bg-panelAlt/50 p-4">
+                <div className="max-w-none p-4">
                   <div className="flex items-center gap-4">
                     <UserAvatar
                       name={name || profile?.name || "Usuário"}
@@ -518,10 +571,9 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted">Arquivo da foto</label>
-                <div className="max-w-[460px] rounded-[34px] border border-border bg-panelAlt/35 px-4 py-3">
-                  <div className="flex flex-wrap items-center gap-3">
+              <div className="flex justify-center lg:justify-start">
+                <div className="flex min-h-[96px] items-center justify-center">
+                  <div className="flex flex-wrap items-center justify-center gap-3">
                     <label className="inline-flex cursor-pointer items-center rounded-[20px] border border-border bg-panel px-4 py-2 text-sm font-medium text-text transition hover:border-brand hover:text-brand">
                       <input
                         type="file"
@@ -531,13 +583,7 @@ export default function SettingsPage() {
                       />
                       {avatarFile ? "Trocar foto selecionada" : avatarUrl ? "Trocar foto do perfil" : "Selecionar foto do perfil"}
                     </label>
-                    <span className="min-w-0 truncate text-xs text-muted">
-                      {avatarFile ? avatarFile.name : avatarUrl ? "Foto atual do perfil" : "Nenhuma foto enviada"}
-                    </span>
                   </div>
-                  <p className="mt-2 text-xs text-muted">
-                    A foto será usada na equipe, no Kanban e em pontos de identificação do app.
-                  </p>
                 </div>
               </div>
             </div>
@@ -612,16 +658,16 @@ export default function SettingsPage() {
               <Input value={agency?.slug ?? ""} disabled />
             </div>
 
-            <div className="md:col-span-2 grid gap-4 lg:grid-cols-[220px_1fr]">
+            <div className="md:col-span-2 grid items-center gap-4 lg:grid-cols-[440px_1fr]">
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted">Logo / ícone</label>
-                <div className="max-w-[360px] rounded-[34px] border border-border bg-panelAlt/50 p-4">
+                <div className="max-w-none p-4">
                   <div className="flex items-center gap-4">
                     <AgencyMark
                       agencyName={agencyName || agency?.name || "Agência"}
                       logoUrl={displayedLogoUrl}
                       updatedAt={agency?.updated_at}
-                      className="h-16 w-16 rounded-2xl shadow-soft"
+                      className="h-16 w-16 rounded-full shadow-soft"
                       fallbackClassName="text-lg font-semibold"
                     />
                     <div className="min-w-0">
@@ -634,10 +680,9 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted">Arquivo do logo</label>
-                <div className="max-w-[460px] rounded-[34px] border border-border bg-panelAlt/35 px-4 py-3">
-                  <div className="flex flex-wrap items-center gap-3">
+              <div className="flex justify-center lg:justify-start">
+                <div className="flex min-h-[96px] items-center justify-center">
+                  <div className="flex flex-wrap items-center justify-center gap-3">
                     <label
                       className={
                         "inline-flex items-center rounded-[20px] border px-4 py-2 text-sm font-medium transition " +
@@ -655,15 +700,7 @@ export default function SettingsPage() {
                       />
                       {logoFile ? "Trocar imagem selecionada" : agencyLogoUrl ? "Trocar logo da agência" : "Selecionar logo da agência"}
                     </label>
-                    <span className="min-w-0 truncate text-xs text-muted">
-                      {logoFile ? logoFile.name : agencyLogoUrl ? "Logo atual da agência" : "Nenhum logo enviado"}
-                    </span>
                   </div>
-                  <p className="mt-2 text-xs text-muted">
-                    {isAdmin
-                      ? "Envie um logo quadrado para funcionar bem no topo e na sidebar."
-                      : "Somente administradores podem alterar o logo da agência."}
-                  </p>
                 </div>
               </div>
             </div>
@@ -779,19 +816,23 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
-                <Button type="button" variant="secondary" onClick={() => setShowUpgradeHint((current) => !current)}>
-                  Solicitar upgrade
-                </Button>
-                {canCancelSubscription ? (
-                  <Button type="button" variant="danger" onClick={handleCancelSubscription} disabled={cancelingSubscription}>
-                    {cancelingSubscription ? "Cancelando assinatura..." : "Cancelar assinatura"}
-                  </Button>
-                ) : null}
-                {showUpgradeHint ? (
+                {nextUpgradePlanCode ? (
+                  isAdmin ? (
+                    <Button type="button" variant="secondary" onClick={handleUpgradeSubscription} disabled={startingUpgrade}>
+                      {startingUpgrade
+                        ? "Redirecionando para o pagamento..."
+                        : nextUpgradePlanLabel
+                          ? `Fazer upgrade para ${nextUpgradePlanLabel}`
+                          : "Fazer upgrade"}
+                    </Button>
+                  ) : (
+                    <p className="text-sm text-muted">Somente administradores podem solicitar o upgrade do plano.</p>
+                  )
+                ) : (
                   <p className="text-sm text-muted">
-                    Entre em contato com o comercial ou com o super admin da plataforma para alterar o plano da agência.
+                    Você já usa o plano mais completo. Para personalizações, entre em contato com o suporte.
                   </p>
-                ) : null}
+                )}
               </div>
 
               <div className="rounded-xl border border-border bg-panelAlt/35 p-4">
@@ -810,9 +851,14 @@ export default function SettingsPage() {
                     Essa assinatura ainda não está vinculada a um contrato cancelável pelo painel. Se precisar, seguimos pelo suporte.
                   </p>
                 ) : (
-                  <p className="mt-3 text-xs text-muted">
-                    O cancelamento é enviado para o Asaas e refletido imediatamente no painel da agência.
-                  </p>
+                  <div className="mt-3 space-y-3">
+                    <p className="text-xs text-muted">
+                      O cancelamento é enviado para o Asaas e refletido imediatamente no painel da agência.
+                    </p>
+                    <Button type="button" variant="danger" onClick={handleCancelSubscription} disabled={cancelingSubscription}>
+                      {cancelingSubscription ? "Cancelando assinatura..." : "Cancelar assinatura"}
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>

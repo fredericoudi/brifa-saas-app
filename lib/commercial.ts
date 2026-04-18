@@ -6,6 +6,12 @@ export const COMMERCIAL_PLAN_CODES = ["starter", "pro", "agency", "growth"] as c
 export type CommercialPlanCode = (typeof COMMERCIAL_PLAN_CODES)[number];
 export const MANAGEABLE_COMMERCIAL_PLAN_CODES = ["starter", "pro", "agency"] as const;
 export type ManageableCommercialPlanCode = (typeof MANAGEABLE_COMMERCIAL_PLAN_CODES)[number];
+export const SELF_SERVE_UPGRADE_PATH: Record<CommercialPlanCode, CommercialPlanCode | null> = {
+  starter: "pro",
+  pro: "agency",
+  agency: null,
+  growth: "agency"
+} as const;
 
 export const COMMERCIAL_SUBSCRIPTION_STATUSES = [
   "trial",
@@ -131,6 +137,14 @@ type FreemiumPlanType = keyof typeof LIMITS;
 
 function isCommercialPlanCode(value: string): value is CommercialPlanCode {
   return COMMERCIAL_PLAN_CODES.includes(value as CommercialPlanCode);
+}
+
+export function resolveNextUpgradePlanCode(currentPlanCode: string | null | undefined): CommercialPlanCode | null {
+  if (!currentPlanCode || !isCommercialPlanCode(currentPlanCode)) {
+    return null;
+  }
+
+  return SELF_SERVE_UPGRADE_PATH[currentPlanCode];
 }
 
 function isMissingSupabaseTable(message: string, table: string) {

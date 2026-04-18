@@ -126,7 +126,7 @@ export function AppSidebar({
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-[23.4rem] bg-panel shadow-[6px_0_20px_-14px_rgba(15,23,42,0.26)] transition-transform duration-200 lg:hidden",
+          "fixed inset-y-0 left-0 z-50 w-[18.4rem] bg-panel shadow-[6px_0_20px_-14px_rgba(15,23,42,0.26)] transition-transform duration-200 lg:hidden",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -140,8 +140,10 @@ export function AppSidebar({
           >
             <Image src={logoBrifa} alt="Brifa" priority className="h-auto w-[94px]" />
           </Link>
-          <SidebarNav navItems={navItems} pathname={pathname} expanded={true} onNavigate={onMobileClose} />
-          <div className="mt-auto bg-panelAlt/55 p-[13px]">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <SidebarNav navItems={navItems} pathname={pathname} expanded={true} onNavigate={onMobileClose} />
+          </div>
+          <div className="mt-auto bg-panelAlt/55 px-0 py-[13px]">
             <SidebarModeControl mode={mode} onChange={onModeChange} compact={false} />
           </div>
         </div>
@@ -166,8 +168,10 @@ export function AppSidebar({
           )}
         </div>
 
-        <SidebarNav navItems={navItems} pathname={pathname} expanded={desktopExpanded} />
-        <div className="mt-auto bg-panelAlt/55 p-[13px]">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <SidebarNav navItems={navItems} pathname={pathname} expanded={desktopExpanded} />
+        </div>
+        <div className="mt-auto bg-panelAlt/55 px-0 py-[13px]">
           <SidebarModeControl mode={mode} onChange={onModeChange} compact={!desktopExpanded} />
         </div>
       </aside>

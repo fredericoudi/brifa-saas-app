@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { File, FileDown, Video } from "lucide-react";
 import { JobExitBar } from "@/components/jobs/job-exit-bar";
+import { TaskChecklistPanel } from "@/components/jobs/task-checklist-panel";
 import { JobViewTracker } from "@/components/jobs/job-view-tracker";
 import { AvatarGroup } from "@/components/ui/avatar-group";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +10,6 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { requireAuth } from "@/lib/auth";
 import type { Job, JobParticipantHistory } from "@/lib/database.types";
-import { getTaskChecklistProgress, normalizeTaskChecklistItems } from "@/lib/task-checklist";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { formatDate, getStatusBadgeVariant, JOB_STATUS_LABEL, TASK_PRIORITY_LABEL, TASK_STATUS_LABEL } from "@/lib/utils";
 
@@ -406,9 +406,6 @@ export default async function JobDetailPage({ params }: { params: { id: string }
             ) : (
               <div className="space-y-3">
                 {currentUserTasks.map((task) => {
-                  const checklistItems = normalizeTaskChecklistItems(task.checklist_items);
-                  const checklistProgress = getTaskChecklistProgress(checklistItems);
-
                   return (
                     <div key={task.id} className="rounded-xl border border-brand/20 bg-brand/5 p-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -428,34 +425,14 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                         {task.description || "Sem descrição complementar para esta tarefa."}
                       </p>
 
-                      <div className="mt-4 rounded-xl border border-border/70 bg-white/90 p-3">
-                        <div className="flex items-center justify-between text-xs text-muted">
-                          <p className="font-semibold uppercase tracking-wide">Checklist</p>
-                          <p className="font-semibold">
-                            {checklistProgress.completed}/{checklistProgress.total} • {checklistProgress.percent}%
-                          </p>
-                        </div>
-                        <div className="mt-2 h-2 rounded-full bg-border/70">
-                          <span
-                            className="block h-2 rounded-full bg-brand"
-                            style={{ width: `${checklistProgress.percent}%` }}
-                          />
-                        </div>
-                        {checklistItems.length > 0 ? (
-                          <ul className="mt-3 space-y-1 text-sm text-text">
-                            {checklistItems.map((item) => (
-                              <li key={item.id} className="flex items-center gap-2">
-                                <span className="inline-flex h-4 w-4 items-center justify-center rounded border border-border bg-white text-[10px]">
-                                  {item.done ? "✓" : ""}
-                                </span>
-                                <span className={item.done ? "line-through text-muted" : ""}>{item.text}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="mt-3 text-xs text-muted">Nenhum item de checklist nesta tarefa.</p>
-                        )}
-                      </div>
+                      <TaskChecklistPanel
+                        taskId={task.id}
+                        initialItems={task.checklist_items}
+                        className="mt-4 bg-white/90"
+                        listClassName="text-sm text-text"
+                        itemTextClassName="text-sm"
+                        emptyStateClassName="text-xs"
+                      />
                     </div>
                   );
                 })}
@@ -482,8 +459,6 @@ export default async function JobDetailPage({ params }: { params: { id: string }
               <div className="space-y-3">
                 {allTasks.map((task) => {
                   const assignees = assigneesByTask.get(task.id) ?? [];
-                  const checklistItems = normalizeTaskChecklistItems(task.checklist_items);
-                  const checklistProgress = getTaskChecklistProgress(checklistItems);
                   return (
                     <div key={task.id} className="rounded-xl border border-border p-3">
                       <div className="flex items-center justify-between gap-3">
@@ -504,34 +479,13 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                       </div>
                       {task.description ? <p className="mt-2 text-sm text-muted">{task.description}</p> : null}
 
-                      <div className="mt-3 rounded-xl border border-border/70 bg-panelAlt/60 p-3">
-                        <div className="flex items-center justify-between text-xs text-muted">
-                          <p className="font-semibold uppercase tracking-wide">Checklist</p>
-                          <p className="font-semibold">
-                            {checklistProgress.completed}/{checklistProgress.total} • {checklistProgress.percent}%
-                          </p>
-                        </div>
-                        <div className="mt-2 h-2 rounded-full bg-border/70">
-                          <span
-                            className="block h-2 rounded-full bg-brand"
-                            style={{ width: `${checklistProgress.percent}%` }}
-                          />
-                        </div>
-                        {checklistItems.length > 0 ? (
-                          <ul className="mt-3 space-y-1 text-xs text-muted">
-                            {checklistItems.map((item) => (
-                              <li key={item.id} className="flex items-center gap-2">
-                                <span className="inline-flex h-4 w-4 items-center justify-center rounded border border-border bg-white text-[10px]">
-                                  {item.done ? "✓" : ""}
-                                </span>
-                                <span className={item.done ? "line-through" : ""}>{item.text}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="mt-3 text-xs text-muted">Nenhum item de checklist nesta tarefa.</p>
-                        )}
-                      </div>
+                      <TaskChecklistPanel
+                        taskId={task.id}
+                        initialItems={task.checklist_items}
+                        listClassName="text-xs text-muted"
+                        itemTextClassName="text-xs"
+                        emptyStateClassName="text-xs"
+                      />
                     </div>
                   );
                 })}

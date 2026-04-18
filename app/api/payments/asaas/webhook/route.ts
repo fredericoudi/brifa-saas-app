@@ -3,6 +3,7 @@ import { issueOnboardingToken, resolvePlanLabel, sendAgencyAccessReadyEmail } fr
 import type { Agency, AgencySubscription, CheckoutSession, Plan } from "@/lib/database.types";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import {
+  cancelAsaasSubscription,
   isFutureAsaasDueDate,
   isAsaasDelinquentEvent,
   isAsaasPaymentConfirmed,
@@ -63,6 +64,20 @@ function mapAsaasEventToSessionStatus(event: string, confirmed: boolean, delinqu
   return "updated";
 }
 
+function mergeCheckoutSessionMetadata(
+  currentMetadata: CheckoutSession["metadata"],
+  nextMetadata: Record<string, unknown>
+) {
+  if (!currentMetadata || typeof currentMetadata !== "object" || Array.isArray(currentMetadata)) {
+    return nextMetadata;
+  }
+
+  return {
+    ...currentMetadata,
+    ...nextMetadata
+  };
+}
+
 export async function POST(request: Request) {
   try {
     if (!validateAsaasWebhookRequest(request)) {
@@ -105,17 +120,20 @@ export async function POST(request: Request) {
         provider_checkout_id: parsed.checkoutId ?? checkoutSession.provider_checkout_id,
         provider_customer_id: parsed.customerId ?? checkoutSession.provider_customer_id,
         provider_subscription_id: parsed.subscriptionId ?? checkoutSession.provider_subscription_id,
-        metadata: parsed.raw
+        metadata: mergeCheckoutSessionMetadata(checkoutSession.metadata, parsed.raw as Record<string, unknown>)
       })
       .eq("id", checkoutSession.id);
 
     if (confirmed) {
       if (checkoutSession.status !== "paid") {
         const shouldSendOnboarding = agency.status === "pending_payment";
+        const previousSubscriptionId = subscription.external_subscription_id;
+        const nextSubscriptionId = parsed.subscriptionId ?? checkoutSession.provider_subscription_id;
         await Promise.all([
           admin
             .from("agencies")
             .update({
+              plan: (plan as Plan | null)?.code ?? agency.plan,
               status: "active",
               activated_at: agency.activated_at ?? new Date().toISOString()
             })
@@ -123,14 +141,28 @@ export async function POST(request: Request) {
           admin
             .from("agency_subscriptions")
             .update({
+              plan_id: checkoutSession.plan_id,
               status: "active",
               payment_provider: "asaas",
               external_customer_id: parsed.customerId ?? checkoutSession.provider_customer_id,
-              external_subscription_id: parsed.subscriptionId ?? checkoutSession.provider_subscription_id,
+              external_subscription_id: nextSubscriptionId,
               next_billing_date: parsed.nextDueDate ?? subscription.next_billing_date
             })
             .eq("id", (subscription as AgencySubscription).id)
         ]);
+
+        if (
+          previousSubscriptionId &&
+          nextSubscriptionId &&
+          previousSubscriptionId !== nextSubscriptionId &&
+          subscription.status !== "canceled"
+        ) {
+          try {
+            await cancelAsaasSubscription(previousSubscriptionId);
+          } catch (cancelError) {
+            console.error("Failed to cancel previous Asaas subscription after upgrade", cancelError);
+          }
+        }
 
         const typedAgency = agency as Agency;
         if (shouldSendOnboarding && typedAgency.owner_email) {
@@ -171,6 +203,7 @@ export async function POST(request: Request) {
           admin
             .from("agencies")
             .update({
+              plan: (plan as Plan | null)?.code ?? agency.plan,
               status: "trial",
               trial_activated: true,
               activated_at: agency.activated_at ?? trialStartedAt,
@@ -181,6 +214,7 @@ export async function POST(request: Request) {
           admin
             .from("agency_subscriptions")
             .update({
+              plan_id: checkoutSession.plan_id,
               status: "trial",
               payment_provider: "asaas",
               external_customer_id: parsed.customerId ?? checkoutSession.provider_customer_id,

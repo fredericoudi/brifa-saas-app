@@ -1129,10 +1129,11 @@ export default function JobsPage() {
         return;
       }
 
-      const payload = {
-        agency_id: profile.agency_id,
-        client_id: form.client_id,
-        title: form.title,
+	      const payload = {
+	        agency_id: profile.agency_id,
+	        agency_time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+	        client_id: form.client_id,
+	        title: form.title,
         client_need: form.client_need.trim() || null,
         description: form.description || null,
         status: form.status,

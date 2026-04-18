@@ -155,8 +155,9 @@ export async function createAsaasCheckoutSession(input: {
   priceCents: number;
   successUrl: string;
   cancelUrl: string;
+  nextDueDate?: string;
 }) {
-  const nextDueDate = addMonths(new Date(), 1).toISOString().slice(0, 10);
+  const nextDueDate = input.nextDueDate?.trim() || addMonths(new Date(), 1).toISOString().slice(0, 10);
 
   const raw = (await asaasRequest<Record<string, unknown>>({
     path: "/checkouts",

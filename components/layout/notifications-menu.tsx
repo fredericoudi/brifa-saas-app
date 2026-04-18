@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { UserAvatar } from "@/components/ui/user-avatar";
 import type { AgencyNotificationItem } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 
@@ -27,16 +26,10 @@ const toneClassMap: Record<AgencyNotificationItem["tone"], string> = {
 
 export function NotificationsMenu({
   notifications,
-  readStateKey,
-  avatarName,
-  avatarUrl,
-  avatarUpdatedAt
+  readStateKey
 }: {
   notifications: AgencyNotificationItem[];
   readStateKey: string;
-  avatarName: string;
-  avatarUrl: string | null;
-  avatarUpdatedAt?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [readIds, setReadIds] = useState<string[]>([]);
@@ -108,7 +101,7 @@ export function NotificationsMenu({
     <div ref={rootRef} className="relative">
       <button
         type="button"
-        className="inline-flex items-center gap-2"
+        className="inline-flex items-center"
         aria-label="Abrir notificações"
         onClick={() =>
           setOpen((prev) => {
@@ -119,7 +112,7 @@ export function NotificationsMenu({
             return nextOpen;
           })
         }
-      >
+        >
         <span className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/80 bg-panel text-muted transition hover:bg-panelAlt hover:text-text">
           <Bell className="h-[18px] w-[18px]" />
           {unreadCount > 0 ? (
@@ -128,13 +121,6 @@ export function NotificationsMenu({
             </span>
           ) : null}
         </span>
-        <UserAvatar
-          name={avatarName}
-          avatarUrl={avatarUrl}
-          updatedAt={avatarUpdatedAt}
-          className="h-11 w-11 border-border/80 bg-panelAlt text-sm"
-          fallbackClassName="text-sm"
-        />
       </button>
 
       {open ? (

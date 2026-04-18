@@ -92,7 +92,7 @@ export function AppTopbar({
           {canCreateJob ? (
             <Link
               href={newJobHref}
-              className="hidden h-12 items-center justify-center gap-2 rounded-[16px] bg-brand px-6 text-sm font-semibold text-white shadow-[0_18px_30px_-22px_hsl(var(--brand)/0.9)] transition hover:-translate-y-0.5 hover:brightness-[1.03] md:inline-flex"
+              className="hidden h-12 items-center justify-center gap-2 rounded-full bg-brand px-6 text-sm font-semibold text-white shadow-[0_18px_30px_-22px_hsl(var(--brand)/0.9)] transition hover:-translate-y-0.5 hover:brightness-[1.03] md:inline-flex"
             >
               <Plus className="h-4 w-4" />
               Novo Job
@@ -102,9 +102,6 @@ export function AppTopbar({
           <NotificationsMenu
             notifications={notifications}
             readStateKey={notificationsReadStateKey}
-            avatarName={profileName}
-            avatarUrl={profileAvatarUrl}
-            avatarUpdatedAt={profileUpdatedAt}
           />
 
           <UserMenu

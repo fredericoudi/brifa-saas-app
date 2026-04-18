@@ -7,10 +7,10 @@ import {
   BarChart3,
   Briefcase,
   Building2,
+  CalendarDays,
   Kanban,
   LayoutDashboard,
   ListTodo,
-  MessageSquareText,
   Settings,
   ShieldCheck,
   type LucideIcon,
@@ -45,11 +45,11 @@ const baseNavItems: readonly BaseNavItem[] = [
   { path: "/jobs", label: "Jobs", icon: Briefcase, iconSrc: "/icons/sidebar/jobs.svg" },
   { path: "/tasks", label: "Tarefas", icon: ListTodo, iconSrc: "/icons/sidebar/tarefas.svg" },
   { path: "/jobs/kanban", label: "Kanban", icon: Kanban, iconSrc: "/icons/sidebar/kanban.svg" },
+  { path: "/calendar", label: "Calendário", icon: CalendarDays, iconSrc: "/icons/sidebar/calendario.svg" },
   { path: "/archived", label: "Arquivados", icon: Archive, iconSrc: "/icons/sidebar/arquivados.svg" },
   { path: "/clients", label: "Clientes", icon: Building2, iconSrc: "/icons/sidebar/clientes.svg" },
   { path: "/team", label: "Equipe", icon: Users, iconSrc: "/icons/sidebar/equipe.svg" },
   { path: "/workload", label: "Produção da Equipe", icon: BarChart3, iconSrc: "/icons/sidebar/producao-equipe.svg" },
-  { path: "/conversations", label: "Conversas", icon: MessageSquareText, adminOnly: true },
   { path: "/settings", label: "Configurações", icon: Settings, iconSrc: "/icons/sidebar/configuracoes.svg" }
 ] as const;
 
@@ -59,6 +59,7 @@ const titleMap: Record<string, string> = {
   dashboard: "Dashboard",
   jobs: "Jobs",
   kanban: "Kanban",
+  calendar: "Calendário",
   tasks: "Tarefas",
   archived: "Arquivados",
   clients: "Clientes",
@@ -70,7 +71,7 @@ const titleMap: Record<string, string> = {
 };
 
 const SIDEBAR_MODE_STORAGE_KEY = "app.sidebar.mode";
-const SIDEBAR_EXPANDED_WIDTH = 312;
+const SIDEBAR_EXPANDED_WIDTH = 282;
 const SIDEBAR_COLLAPSED_WIDTH = 116;
 const TOPBAR_HEIGHT = 84;
 const COMMERCIAL_CONTEXT_REFRESH_EVENT = "commercial-context:refresh";
