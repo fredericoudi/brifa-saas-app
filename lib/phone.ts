@@ -7,8 +7,3 @@ export function isValidPhoneNumber(value: string | null | undefined) {
   if (!value) return false;
   return /^\d{10,15}$/.test(value);
 }
-
-export function formatPhoneNumberHint(value: string | null | undefined) {
-  if (!value) return "Não informado";
-  return value;
-}

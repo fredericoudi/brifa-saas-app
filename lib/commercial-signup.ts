@@ -13,7 +13,7 @@ export type PublicSignupPlanOption = {
   highlight: string;
 };
 
-export const PUBLIC_SIGNUP_PLAN_MAP: Record<PublicSignupPlanSlug, CommercialPlanCode> = {
+const PUBLIC_SIGNUP_PLAN_MAP: Record<PublicSignupPlanSlug, CommercialPlanCode> = {
   start: "starter",
   pro: "pro",
   business: "agency"
@@ -66,7 +66,7 @@ export function resolvePublicSignupPlanFromCommercialCode(code: string | null | 
   return mapped ?? null;
 }
 
-export function formatPublicSignupPriceLabel(priceCents: number) {
+function formatPublicSignupPriceLabel(priceCents: number) {
   const normalizedPrice = Number.isFinite(priceCents) ? Math.max(0, Math.round(priceCents)) : 0;
   return `${publicSignupCurrencyFormatter.format(normalizedPrice / 100)}/mês`;
 }
@@ -90,7 +90,7 @@ export const DEFAULT_PUBLIC_SIGNUP_PLAN_OPTIONS: PublicSignupPlanOption[] = PUBL
   buildPublicSignupPlanOption(slug)
 );
 
-export function normalizeSignupSlug(value: string) {
+function normalizeSignupSlug(value: string) {
   const normalized = normalizeAgencySlug(value);
   return normalized;
 }
@@ -127,7 +127,7 @@ export function computeOnboardingExpiry(days = 7) {
   return expiresAt.toISOString();
 }
 
-export function buildOnboardingActivationPath(slug: string, token: string) {
+function buildOnboardingActivationPath(slug: string, token: string) {
   const params = new URLSearchParams({
     agency: slug,
     onboarding: token

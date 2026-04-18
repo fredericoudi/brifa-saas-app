@@ -76,7 +76,7 @@ export function isCanonicalAgencyPath(pathname: string) {
   return segments.length >= 2 && segments[0]?.toLowerCase() === "app" && !isReservedAgencySlug(segments[1]);
 }
 
-export function extractAgencySlugFromPathname(pathname: string) {
+function extractAgencySlugFromPathname(pathname: string) {
   const segments = pathname.split("/").filter(Boolean);
 
   if (segments.length >= 2 && segments[0]?.toLowerCase() === "app" && !isReservedAgencySlug(segments[1])) {
@@ -107,16 +107,4 @@ export function prependAgencyAppPath(pathname: string, slug: string) {
 export function resolveAgencyPathFromCurrent(pathname: string, path = "/dashboard") {
   const slug = extractAgencySlugFromPathname(pathname);
   return resolveAgencyAppPath(slug, path) ?? path;
-}
-
-export function mapPlatformPathToCanonical(pathname: string) {
-  if (pathname === "/platform") return resolvePlatformPath();
-  if (pathname.startsWith("/platform/")) return resolvePlatformPath(pathname.replace(/^\/platform/, ""));
-  if (pathname === "/platform-login") return resolvePlatformLoginPath();
-  if (pathname.startsWith("/platform-login?")) return resolvePlatformLoginPath();
-  if (pathname === "/master" || pathname === "/master-panel" || pathname === "/admin") {
-    return resolvePlatformPath();
-  }
-
-  return pathname;
 }

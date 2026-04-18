@@ -1,4 +1,4 @@
-export function normalizeBrazilianTaxId(value: string) {
+function normalizeBrazilianTaxId(value: string) {
   return value.replace(/\D/g, "");
 }
 

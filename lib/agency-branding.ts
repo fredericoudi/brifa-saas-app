@@ -1,4 +1,4 @@
-export const DEFAULT_BRAND_HEX = "#335CFF";
+const DEFAULT_BRAND_HEX = "#335CFF";
 export const AGENCY_BRAND_EVENT = "agency-brand-updated";
 
 export type AgencyBrandEventDetail = {
@@ -12,7 +12,7 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
-export function normalizeHexColor(value: string | null | undefined) {
+function normalizeHexColor(value: string | null | undefined) {
   const trimmed = value?.trim() ?? "";
   if (!trimmed) return null;
 
@@ -78,7 +78,7 @@ function rgbToHsl({ r, g, b }: { r: number; g: number; b: number }) {
   };
 }
 
-export function getAgencyBrandTheme(colorValue: string | null | undefined) {
+function getAgencyBrandTheme(colorValue: string | null | undefined) {
   const hex = normalizeHexColor(colorValue) ?? DEFAULT_BRAND_HEX;
   const rgb = hexToRgb(hex);
   const base = rgb ? rgbToHsl(rgb) : { h: 256, s: 72, l: 44 };
@@ -105,16 +105,4 @@ export function getAgencyLogoSrc(logoUrl: string | null | undefined, cacheKey?: 
   if (logoUrl.startsWith("blob:") || logoUrl.startsWith("data:")) return logoUrl;
   if (!cacheKey) return logoUrl;
   return `${logoUrl}${logoUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(cacheKey)}`;
-}
-
-export function getAgencyFallbackFavicon(agencyName: string) {
-  const letter = agencyName.trim().charAt(0).toUpperCase() || "A";
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-      <rect width="64" height="64" rx="18" fill="${DEFAULT_BRAND_HEX}"/>
-      <text x="32" y="40" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#ffffff">${letter}</text>
-    </svg>
-  `;
-
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }

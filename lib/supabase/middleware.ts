@@ -18,8 +18,6 @@ type CookieMutation = {
 
 const PUBLIC_ROUTES = [
   "/",
-  "/assets",
-  "/landing",
   "/login",
   "/platform-login",
   "/app/platform-login",
@@ -52,8 +50,6 @@ const LEGACY_AGENCY_ROUTE_PREFIXES = [
   "/workload",
   "/settings"
 ];
-const LANDING_HOSTS = new Set(["brifa.app", "www.brifa.app"]);
-
 function matchesRoutePrefix(pathname: string, route: string) {
   return pathname === route || pathname.startsWith(`${route}/`);
 }
@@ -80,14 +76,6 @@ function isAgencyAppPanelPath(pathname: string) {
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
-
-  const hostHeader = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? request.nextUrl.hostname;
-
-  if (LANDING_HOSTS.has(hostHeader) && request.nextUrl.pathname === "/") {
-    const rewriteUrl = request.nextUrl.clone();
-    rewriteUrl.pathname = "/landing/index.html";
-    return NextResponse.rewrite(rewriteUrl);
-  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

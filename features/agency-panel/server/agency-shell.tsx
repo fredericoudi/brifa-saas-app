@@ -1,9 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
-import { resolveAgencyAppPath, resolveAgencyPortalPath } from "@/lib/agency-routing";
+import { resolveAgencyPortalPath } from "@/lib/agency-routing";
 import { requireAuth, resolveProfileHomePath } from "@/lib/auth";
 import type { Agency, UserProfile } from "@/lib/database.types";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 type AgencyShellAgency = Pick<Agency, "id" | "name" | "slug" | "status" | "logo_url" | "brand_color" | "updated_at">;
 
@@ -47,30 +46,6 @@ function renderAgencyShell(context: AgencyShellContext, children: React.ReactNod
   );
 }
 
-export async function renderCurrentAgencyShell(children: React.ReactNode) {
-  const { profile } = await requireAuth();
-  const supabase = createServerSupabaseClient();
-
-  const { data: agency, error } = await supabase
-    .from("agencies")
-    .select("id, name, slug, status, logo_url, brand_color, updated_at")
-    .eq("id", profile.agency_id)
-    .maybeSingle();
-
-  if (error || !agency) {
-    redirect("/login?error=agency_not_found");
-  }
-
-  if (
-    profile.platform_role !== "super_admin" &&
-    (agency.status === "inactive" || agency.status === "suspended" || agency.status === "pending_payment")
-  ) {
-    redirect(`/login?error=${resolveAgencyBlockedError(agency.status)}`);
-  }
-
-  return renderAgencyShell(buildAgencyShellContext(profile, agency), children);
-}
-
 export async function renderAgencyShellBySlug(slug: string, children: React.ReactNode) {
   const normalizedSlug = slug.trim().toLowerCase();
   const { profile } = await requireAuth();
@@ -100,8 +75,4 @@ export async function renderAgencyShellBySlug(slug: string, children: React.Reac
   }
 
   return renderAgencyShell(context, children);
-}
-
-export async function resolveAgencyDashboardPathFromSlug(slug: string) {
-  return resolveAgencyAppPath(slug, "/dashboard") ?? "/login?error=agency_not_found";
 }
